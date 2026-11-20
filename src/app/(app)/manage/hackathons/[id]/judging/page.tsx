@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getManagedHackathon, getStageJudging } from '@/app/(site)/events/_lib/hackathons/queries'
 import { criterionMeans, entryTracks, judgeEligibility, rankEntries, type Pair } from '@/app/(site)/events/_lib/hackathons/judging'
-import { stageState } from '@/app/(site)/events/_lib/hackathons/rules'
+import { judgingOpen, stageState } from '@/app/(site)/events/_lib/hackathons/rules'
 import { SectionCard } from '@/components/section-card'
 import { StageStateBadge } from '@/components/stage-state-badge'
 import { requireUser } from '@/lib/guards'
@@ -75,7 +75,7 @@ export default async function JudgingPage({ params }: { params: Promise<{ id: st
             ) : (
               <div className="space-y-8">
                 {s.reviewMode === 'random' ? (
-                  <AssignPanel hackathonId={h.id} stageId={s.id} perEntry={s.judgesPerSubmission} hasAssignments={assigned > 0} />
+                  <AssignPanel hackathonId={h.id} stageId={s.id} perEntry={s.judgesPerSubmission} hasAssignments={assigned > 0} canDraw={judgingOpen(s, now)} />
                 ) : (
                   <p className="text-sm text-fg-muted">All judges - every eligible judge sees every submission automatically once submissions close. <span className="text-fg-faint">(Change under Stages.)</span></p>
                 )}

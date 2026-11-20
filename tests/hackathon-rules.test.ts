@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { advancedStageIds, buildAnswersSchema, canJoin, canManageHackathon, needsOrganizerTerms, pickOpenStage, placeTitle, prizePlaces, publishChecklist, registrationStatus, reopensJudging, stageState, validateStages, windowChangeWarnings, type FieldDef } from '@/app/(site)/events/_lib/hackathons/rules'
+import { advancedStageIds, buildAnswersSchema, canJoin, canManageHackathon, judgingOpen, needsOrganizerTerms, pickOpenStage, placeTitle, prizePlaces, publishChecklist, registrationStatus, reopensJudging, stageState, validateStages, windowChangeWarnings, type FieldDef } from '@/app/(site)/events/_lib/hackathons/rules'
 
 const d = (s: string) => new Date(s)
 const stage = (o: Partial<{ opensAt: Date; closesAt: Date; judgingClosedAt: Date | null; name: string; order: number }> = {}) => ({
@@ -144,4 +144,13 @@ test('prizePlaces: single place or the whole range', () => {
   assert.deepEqual(prizePlaces({ placement: 2, placementTo: null }), [2])
   assert.deepEqual(prizePlaces({ placement: 4, placementTo: 7 }), [4, 5, 6, 7])
   assert.deepEqual(prizePlaces({ placement: 4, placementTo: 3 }), [4])
+})
+
+test('judgingOpen: only after submissions close and before judging is closed (judges are drawn then)', () => {
+  const s = { opensAt: d('2026-11-01T00:00Z'), closesAt: d('2026-11-03T00:00Z'), judgingClosedAt: null }
+  // Before the fix a draw was possible while the stage was still upcoming or open.
+  assert.equal(judgingOpen(s, d('2026-10-31T00:00Z')), false) // upcoming
+  assert.equal(judgingOpen(s, d('2026-11-02T23:59Z')), false) // open
+  assert.equal(judgingOpen(s, d('2026-11-03T00:00Z')), true) // closesAt is exclusive: judging starts
+  assert.equal(judgingOpen({ ...s, judgingClosedAt: d('2026-11-05T00:00Z') }, d('2026-11-06T00:00Z')), false) // closed
 })

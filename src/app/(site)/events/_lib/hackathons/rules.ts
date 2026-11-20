@@ -14,6 +14,9 @@ export function stageState(s: StageWindow, now: Date): StageState {
   return 'judging'
 }
 
+/** Judging is open: submissions have closed (closesAt passed) and judging isn't closed yet. Judges are drawn only then. */
+export const judgingOpen = (s: StageWindow, now: Date) => stageState(s, now) === 'judging'
+
 /**
  * Stage windows may overlap, so several can be open at once. Index of the open stage this
  * builder submits to: the latest one they qualify for (first stage, open to all, or advanced

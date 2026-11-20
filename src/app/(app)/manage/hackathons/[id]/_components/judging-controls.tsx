@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { useActionToast } from '@/hooks/use-action-toast'
 
 /** Random stages only: draw with the stage's settings (set under Stages), preview, apply. */
-export function AssignPanel({ hackathonId, stageId, perEntry, hasAssignments }: { hackathonId: string; stageId: string; perEntry: number | null; hasAssignments: boolean }) {
+export function AssignPanel({ hackathonId, stageId, perEntry, hasAssignments, canDraw }: { hackathonId: string; stageId: string; perEntry: number | null; hasAssignments: boolean; canDraw: boolean }) {
   const [preview, setPreview] = useState<{ seed: string; total: number; load: { judge: string; count: number }[] } | null>(null)
   const { pending, run } = useActionToast()
   const draw = () =>
@@ -22,8 +22,9 @@ export function AssignPanel({ hackathonId, stageId, perEntry, hasAssignments }: 
     <div className="space-y-4">
       <p className="text-sm">Random, balanced - {perEntry ?? '?'} judge{perEntry === 1 ? '' : 's'} per submission <span className="text-fg-faint">(change under Stages)</span></p>
       <p className="text-xs text-fg-faint">Never assigns a judge who is on the team, declared a conflict, or judges other tracks. Submitted reviews are always kept. You can adjust single assignments in the table.</p>
+      {!canDraw && <p className="text-sm text-fg-muted">Draw judges once submissions close - until then teams can still submit and change their entries.</p>}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={pending} onClick={draw}><Shuffle aria-hidden /> {preview ? 'Draw again' : hasAssignments ? 'Preview a new draw' : 'Preview assignment'}</Button>
+        <Button variant="outline" size="sm" disabled={pending || !canDraw} onClick={draw}><Shuffle aria-hidden /> {preview ? 'Draw again' : hasAssignments ? 'Preview a new draw' : 'Preview assignment'}</Button>
         {preview && (
           <Button size="sm" disabled={pending} onClick={() => run(() => applyAssignment({ hackathonId, stageId, seed: preview.seed }), 'Judges assigned and notified', () => setPreview(null))}>
             Apply {preview.total} assignments

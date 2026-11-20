@@ -11,7 +11,7 @@ import { brandedShell, button, CELL, esc, PARA } from '@/lib/email-template'
 import { sendMail } from '@/lib/mailer'
 import { assignRandom, entryTracks, isConflicted, judgeEligibility, weightedTotal, type Pair } from './judging'
 import { assertManage } from './manage'
-import { prizePlaces, stageState } from './rules'
+import { judgingOpen, prizePlaces } from './rules'
 
 const id = z.string().min(1)
 const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://hub.team1.network'
@@ -32,6 +32,8 @@ type LoadedStage = Awaited<ReturnType<typeof loadStage>>
 
 /** A random, balanced draw with the stage's "judges per submission" ("all judges" stages assign themselves, see queries.ts). */
 async function computePairs(stage: LoadedStage, seed: string) {
+  // Before close, later submissions would get no judges and judges would be mailed before they can score.
+  if (!judgingOpen(stage, new Date())) throw new ActionError(stage.judgingClosedAt ? 'Judging is closed for this stage' : 'Draw judges once submissions close')
   const perEntry = stage.judgesPerSubmission
   if (stage.reviewMode !== 'random' || !perEntry) throw new ActionError('This stage assigns every judge automatically - switch it to random judges under Stages to draw')
   const entries = stage.entries.map((e) => ({
@@ -70,7 +72,6 @@ export const applyAssignment = action({ schema: z.object({ hackathonId: id, stag
   const h = await assertManage(hackathonId, user)
   const stage = await loadStage(stageId)
   if (stage.hackathonId !== hackathonId) throw new ActionError('Stage not found')
-  if (stageState(stage, new Date()) === 'closed') throw new ActionError('Judging is closed for this stage')
   const { pairs, keep } = await computePairs(stage, seed)
   const keepSet = new Set(keep.map(([j, e]) => `${j}:${e}`))
   const added = await prisma.$transaction(async (tx) => {
