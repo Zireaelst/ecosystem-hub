@@ -20,7 +20,7 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
   if (!l) notFound()
   const seen = { listingId: l.id, approvedVersionId: l.approvedVersionId, pendingVersionId: l.pendingVersionId }
   const archived = !!l.project.archivedAt
-  const name = (l.pendingVersion ?? l.newer ?? l.approvedVersion)?.name ?? l.project.slug
+  const name = (l.pendingVersion ?? l.newer ?? l.approvedVersion ?? l.project.currentVersion)?.name ?? l.project.slug
   // The versions a reviewer can act on: the submitted one, and a newer one the team saved since.
   const candidates = [
     ...(l.pendingVersion ? [{ v: l.pendingVersion, title: `Waiting for review: version ${l.pendingVersion.number}`, description: `Submitted ${day(l.submittedAt)}, public listing agreed ${day(l.consentAt)}.`, pending: true }] : []),

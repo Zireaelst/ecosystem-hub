@@ -63,7 +63,7 @@ export async function listListingsForReview() {
 export async function getListingForReview(id: string) {
   const r = await prisma.toolingListing.findUnique({
     where: { id },
-    include: { project: { select: { slug: true, archivedAt: true, versions: latestSealed } }, approvedVersion: true, pendingVersion: true },
+    include: { project: { select: { slug: true, archivedAt: true, currentVersion: { select: { name: true } }, versions: latestSealed } }, approvedVersion: true, pendingVersion: true },
   })
   if (!r) return null
   return { ...r, newer: newerVersion(r, r.project.versions[0] ?? null) }
