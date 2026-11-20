@@ -47,7 +47,7 @@ export const submitToTooling = action({ schema: submitListingSchema, permission:
       where: { id: listing.id },
       data: {
         pendingVersionId: version.id, submittedAt: now, submittedById: user.id, consentAt: now, consentById: user.id,
-        closedAt: null, closedById: null, closedReason: null,
+        closedAt: null, closedById: null, closedReason: null, closedNote: null,
         rejectedVersionId: null, rejectedAt: null, rejectedById: null, rejectReason: null, rejectReasonInternal: false,
         // A closed listing shows nothing, so resubmitting starts from scratch.
         ...(listing.closedAt ? { approvedVersionId: null, approvedAt: null, approvedById: null } : {}),
@@ -69,7 +69,7 @@ export const withdrawFromTooling = action({ schema: withdrawListingSchema, permi
   if (!listing || listing.closedAt) throw new ActionError('Nothing to withdraw')
   const r = await prisma.toolingListing.updateMany({
     where: { id: listing.id, closedAt: null },
-    data: { approvedVersionId: null, pendingVersionId: null, closedAt: new Date(), closedById: user.id, closedReason: 'withdrawn' },
+    data: { approvedVersionId: null, pendingVersionId: null, closedAt: new Date(), closedById: user.id, closedReason: 'withdrawn', closedNote: null },
   })
   if (!r.count) throw new ActionError('Nothing to withdraw')
   await recordAudit({ actorId: user.id, action: 'tooling.withdraw', entityType: 'ToolingListing', entityId: listing.id, before: { projectId, approvedVersionId: listing.approvedVersionId, pendingVersionId: listing.pendingVersionId }, after: { closedReason: 'withdrawn' } })
@@ -122,17 +122,17 @@ export const rejectListing = action({ schema: rejectListingSchema, permission: '
   return null
 })
 
-/** Take the project off the list and out of review (e.g. it was archived). The team can submit again. */
+/** Take the project off the list and out of review (a rug, an archived project). The team sees the reason and can submit again. */
 export const removeListing = action({ schema: removeListingSchema, permission: 'tooling.review' }, async (input, user) => {
   const now = await prisma.toolingListing.findUnique({ where: { id: input.listingId }, select: { closedReason: true, closedAt: true } })
   if (now?.closedAt && now.closedReason === 'removed') return null // retry after a lost response
   const r = await prisma.toolingListing.updateMany({
     where: seenWhere(input),
-    data: { approvedVersionId: null, pendingVersionId: null, closedAt: new Date(), closedById: user.id, closedReason: 'removed' },
+    data: { approvedVersionId: null, pendingVersionId: null, closedAt: new Date(), closedById: user.id, closedReason: 'removed', closedNote: input.reason },
   })
   if (!r.count) throw new ActionError(STALE)
   const listing = await prisma.toolingListing.findUniqueOrThrow({ where: { id: input.listingId }, select: { project: { select: { slug: true } } } })
-  await recordAudit({ actorId: user.id, action: 'tooling.remove', entityType: 'ToolingListing', entityId: input.listingId, before: { approvedVersionId: input.approvedVersionId, pendingVersionId: input.pendingVersionId }, after: { closedReason: 'removed' } })
+  await recordAudit({ actorId: user.id, action: 'tooling.remove', entityType: 'ToolingListing', entityId: input.listingId, before: { approvedVersionId: input.approvedVersionId, pendingVersionId: input.pendingVersionId }, after: { closedReason: 'removed', reason: input.reason } })
   refresh(listing.project.slug)
   return null
 })

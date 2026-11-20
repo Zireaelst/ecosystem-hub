@@ -76,6 +76,12 @@ export function submitBlock(l: { closedAt: Date | null; approvedVersionId: strin
   return null
 }
 
+/** Why the listing is off the list, for the team: removed by a reviewer (with their reason) or withdrawn by the team. */
+export function closedState(l: { closedAt: Date | null; closedReason: string | null; closedNote: string | null }): { by: 'team' | 'reviewer'; reason: string | null } | null {
+  if (!l.closedAt) return null
+  return l.closedReason === 'removed' ? { by: 'reviewer', reason: l.closedNote } : { by: 'team', reason: null }
+}
+
 /** The rejection reason the team may see: none when the reviewer marked it internal. */
 export const visibleRejectReason = (l: { rejectReason: string | null; rejectReasonInternal: boolean }) => (l.rejectReasonInternal ? null : l.rejectReason)
 

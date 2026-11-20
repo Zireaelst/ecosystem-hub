@@ -18,6 +18,7 @@ CREATE TABLE "tooling_listings" (
     "closedAt" TIMESTAMP(3),
     "closedById" TEXT,
     "closedReason" TEXT,
+    "closedNote" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

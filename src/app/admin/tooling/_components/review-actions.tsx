@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Check, Trash2, X } from 'lucide-react'
 import { approveListing, rejectListing, removeListing } from '@/app/(site)/tooling/_lib/actions'
 import { REJECT_REASON_MAX } from '@/app/(site)/tooling/_lib/rules'
-import { ConfirmButton } from '@/components/confirm-button'
 import { Field } from '@/components/field'
 import { FormDialog } from '@/components/form-dialog'
 import { Button } from '@/components/ui/button'
@@ -50,9 +49,20 @@ export function RejectButton({ seen, number }: { seen: Seen; number: number }) {
 
 export function RemoveButton({ seen }: { seen: Seen }) {
   const { pending, run } = useActionToast()
+  const [reason, setReason] = useState('')
   return (
-    <ConfirmButton size="default" disabled={pending} message="Take this project off /tooling and out of review? The team can submit it again." onConfirm={() => run(() => removeListing(seen), 'Removed')}>
-      <Trash2 aria-hidden /> Remove listing
-    </ConfirmButton>
+    <FormDialog
+      trigger={<Button variant="ghost" className="text-destructive hover:text-destructive"><Trash2 aria-hidden /> Remove listing</Button>}
+      title="Remove listing"
+      description="Takes the project off /tooling and out of review right away. The team sees your reason and can submit it again for review."
+      submitLabel="Remove"
+      pending={pending}
+      onOpenChange={(o) => !o && setReason('')}
+      onSubmit={() => run(() => removeListing({ ...seen, reason }), 'Removed')}
+    >
+      <Field id="remove-reason" label="Reason (the team sees it)">
+        <Textarea id="remove-reason" value={reason} required maxLength={REJECT_REASON_MAX} rows={4} onChange={(e) => setReason(e.target.value)} />
+      </Field>
+    </FormDialog>
   )
 }

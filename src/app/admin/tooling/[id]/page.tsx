@@ -34,10 +34,11 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
         <SectionCard title="Status">
           <div className="flex flex-wrap gap-2">
             {archived && <StatusPill tone="danger">Project deleted: hidden from /tooling</StatusPill>}
-            {l.closedAt && <StatusPill>{l.closedReason === 'removed' ? 'Removed by a reviewer' : 'Withdrawn by the team'} on {day(l.closedAt)}</StatusPill>}
+            {l.closedAt && <StatusPill tone={l.closedReason === 'removed' ? 'danger' : 'neutral'}>{l.closedReason === 'removed' ? 'Removed by a reviewer' : 'Withdrawn by the team'} on {day(l.closedAt)}</StatusPill>}
             {l.approvedVersion && <StatusPill tone="success">Listed: version {l.approvedVersion.number} since {day(l.approvedAt)}</StatusPill>}
             {!l.closedAt && !l.approvedVersion && <StatusPill>{l.pendingVersion ? 'Not listed yet' : 'Nothing listed or waiting'}</StatusPill>}
           </div>
+          {l.closedReason === 'removed' && l.closedNote && <p className="mt-4 text-sm text-fg-body">Removal reason (the team sees it): “{l.closedNote}”</p>}
           {l.rejectedAt && (
             <p className="mt-4 text-sm text-fg-body">
               Last rejection {day(l.rejectedAt)}{l.rejectReason ? <>: “{l.rejectReason}”</> : ''} {l.rejectReason && <span className="text-fg-muted">({l.rejectReasonInternal ? 'internal' : 'the team sees it'})</span>}

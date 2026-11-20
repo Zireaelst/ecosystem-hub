@@ -39,7 +39,7 @@ export async function listMyToolingProjects(userId: string) {
       toolingListing: {
         select: {
           approvedVersionId: true, pendingVersionId: true, rejectedVersionId: true, rejectedAt: true, rejectReason: true, rejectReasonInternal: true,
-          closedAt: true, closedReason: true, approvedVersion: ref, pendingVersion: ref,
+          closedAt: true, closedReason: true, closedNote: true, approvedVersion: ref, pendingVersion: ref,
         },
       },
     },

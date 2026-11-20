@@ -17,4 +17,7 @@ export const rejectListingSchema = z.object({
   reason: z.string().trim().max(REJECT_REASON_MAX).optional().transform((v) => v || null),
   internal: z.boolean(),
 })
-export const removeListingSchema = z.object(seen)
+export const removeListingSchema = z.object({
+  ...seen,
+  reason: z.string().trim().min(1, 'Say why it is removed - the team sees this').max(REJECT_REASON_MAX),
+})

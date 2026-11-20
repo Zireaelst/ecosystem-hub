@@ -31,6 +31,8 @@ model ToolingListing {
   closedById           String?
   /// withdrawn | removed
   closedReason         String?
+  /// Why a reviewer removed it; shown to the team (required on remove)
+  closedNote           String?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 

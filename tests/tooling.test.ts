@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { wasReplaced } from '@/app/(app)/projects/_lib/rules'
 import {
-  approveProblem, fold, initials, listingProblems, matchesQuery, newerVersion, PAGE_SIZE, SEAL_NOTE, TOOLING_CATEGORY, TOOLING_CONSENT,
+  approveProblem, closedState, fold, initials, listingProblems, matchesQuery, newerVersion, PAGE_SIZE, SEAL_NOTE, TOOLING_CATEGORY, TOOLING_CONSENT,
   submitBlock, toolLinks, viewTools, visibleRejectReason, type ListingState,
 } from '@/app/(site)/tooling/_lib/rules'
 
@@ -58,6 +58,13 @@ test('submitBlock: listed, waiting or rejected versions need an edit first; clos
   assert.match(submitBlock(l({ rejectedVersionId: 'v1', closedAt: new Date() }), 'v1')!, /wasn’t approved/) // withdrawing doesn't clear a rejection
   assert.equal(submitBlock(l({ approvedVersionId: 'v1', closedAt: new Date() }), 'v1'), null) // withdrawn: listing again needs review
   assert.equal(submitBlock(l({ approvedVersionId: 'v1', rejectedVersionId: 'v2' }), 'v3'), null)
+})
+
+test('closedState: a removal shows the reviewer and reason to the team; a withdraw shows no reason', () => {
+  const now = new Date()
+  assert.equal(closedState({ closedAt: null, closedReason: null, closedNote: null }), null)
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', closedNote: 'Repo was deleted' }), { by: 'reviewer', reason: 'Repo was deleted' })
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'withdrawn', closedNote: null }), { by: 'team', reason: null })
 })
 
 test('visibleRejectReason hides internal reasons from the team', () => {

@@ -19,7 +19,8 @@ export type SubmitRow = {
   versionNumber: number
   listed: number | null
   pending: number | null
-  closed: 'withdrawn' | 'removed' | null
+  /** Off the list: withdrawn by the team, or removed by a reviewer with their reason. */
+  closed: { by: 'team' | 'reviewer'; reason: string | null } | null
   /** The last submission was turned down; `reason` is null when there is none or it is internal. */
   rejected: { reason: string | null } | null
   /** What the current version still needs (empty = can be submitted). */
@@ -65,10 +66,15 @@ export function SubmitList({ rows }: { rows: SubmitRow[] }) {
               {row.listed && <StatusPill tone="success">Listed · version {row.listed}</StatusPill>}
               {row.pending && <StatusPill tone="info">Waiting for review · version {row.pending}</StatusPill>}
               {row.rejected && <StatusPill tone="warning">Last submission not approved</StatusPill>}
-              {row.closed === 'withdrawn' && <StatusPill>Withdrawn</StatusPill>}
-              {row.closed === 'removed' && <StatusPill tone="warning">Removed by team1</StatusPill>}
+              {row.closed?.by === 'team' && <StatusPill>Withdrawn</StatusPill>}
+              {row.closed?.by === 'reviewer' && <StatusPill tone="danger">Removed by team1</StatusPill>}
             </div>
           </div>
+          {row.closed?.by === 'reviewer' && (
+            <p className="mt-4 text-sm text-fg-body">
+              team1 took it off /tooling{row.closed.reason ? <>: “{row.closed.reason}”</> : '.'} You can fix the project and submit it again for review.
+            </p>
+          )}
           {row.rejected?.reason && <p className="mt-4 text-sm text-fg-body">team1: “{row.rejected.reason}”</p>}
           {row.blocked ? (
             <p className="mt-4 text-sm text-fg-muted">{row.blocked}</p>

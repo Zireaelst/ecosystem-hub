@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
 import { requireUser } from '@/lib/guards'
 import { listMyToolingProjects } from '../_lib/queries'
-import { listingProblems, submitBlock, TOOLING_CATEGORY, visibleRejectReason } from '../_lib/rules'
+import { closedState, listingProblems, submitBlock, TOOLING_CATEGORY, visibleRejectReason } from '../_lib/rules'
 import { SubmitList, type SubmitRow } from './submit-list'
 
 export const metadata: Metadata = { title: 'Submit to Tooling', robots: { index: false } }
@@ -24,7 +24,7 @@ export default async function SubmitToolPage() {
       versionNumber: v.number,
       listed: open?.approvedVersion?.number ?? null,
       pending: open?.pendingVersion?.number ?? null,
-      closed: (l?.closedAt ? l.closedReason : null) as SubmitRow['closed'],
+      closed: l ? closedState(l) : null,
       rejected: open?.rejectedAt ? { reason: visibleRejectReason(open) } : null,
       problems: listingProblems(v),
       blocked: submitBlock(l, v.id),
