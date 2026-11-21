@@ -21,8 +21,8 @@ test('without SENTRY_DSN captureError returns undefined and captureSecurity does
 test('with Sentry initialised: event id back, security events fingerprinted and tagged', () => {
   sentry.client = {}
   assert.equal(captureError(new Error('x'), { userId: 'u1' }), 'abcdef1234567890')
-  captureSecurity('auth.otp.failed', 'warning', { userId: 'u1', tags: { event: 'auth.otp.failed' }, extra: { n: 1 } })
-  assert.deepEqual(sentry.captureMessage.mock.calls[0], ['auth.otp.failed', { level: 'warning', fingerprint: ['auth.otp.failed'], tags: { event: 'auth.otp.failed', security: 'true' }, user: { id: 'u1' }, extra: { n: 1 } }])
+  captureSecurity('auth.otp.failed', 'warning', { userId: 'u1', ip: '203.0.113.9', tags: { event: 'auth.otp.failed' }, extra: { n: 1 } })
+  assert.deepEqual(sentry.captureMessage.mock.calls[0], ['auth.otp.failed', { level: 'warning', fingerprint: ['auth.otp.failed'], tags: { event: 'auth.otp.failed', security: 'true' }, user: { id: 'u1', ip_address: '203.0.113.9' }, extra: { n: 1 } }])
 })
 
 test('a throwing SDK never reaches the caller', () => {
@@ -42,6 +42,7 @@ test('server options: errors only, no trace headers, no session envelopes', () =
   assert.equal('tracesSampleRate' in o, false)
   assert.deepEqual(o.tracePropagationTargets, [])
   assert.equal(o.enableOpenTelemetrySetup, false)
+  assert.equal(o.attachStacktrace, false)
   const names = (o.integrations as (d: { name: string }[]) => { name: string }[])([{ name: 'ProcessSession' }, { name: 'Http' }]).map((i) => i.name)
   assert.deepEqual(names, ['Http'])
 })
