@@ -41,6 +41,13 @@ test('detail cannot overwrite event, userId or the hashes', () => {
   assert.equal(obj.ok, 1)
 })
 
+test('GlitchTip gets the plain ip', () => {
+  vi.spyOn(logger, 'warn').mockImplementation(() => {})
+  securityEvent('action.forbidden', { userId: 'u-ip', ip: '203.0.113.9' })
+  const [, , ctx] = mon.captureSecurity.mock.calls[0] as unknown as [string, string, { ip?: string }]
+  assert.equal(ctx.ip, '203.0.113.9')
+})
+
 test('hashIdentifier is stable and case/space-insensitive', () => {
   assert.equal(hashIdentifier(' A@B.io '), hashIdentifier('a@b.io'))
   assert.notEqual(hashIdentifier('a@b.io'), hashIdentifier('c@b.io'))

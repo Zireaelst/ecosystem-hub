@@ -1,7 +1,7 @@
 // beforeSend for every Sentry (GlitchTip) client: server, browser, worker. Pure, no runtime SDK import.
 // Removes what can identify a person or carry a secret: cookies, auth headers, every URL query
 // string, invite tokens in paths, emails in error text, Prisma query values, and everything on
-// `user` but the id.
+// `user` but the id (security events also keep the client IP).
 
 import type { NodeOptions } from '@sentry/node'
 
@@ -87,7 +87,12 @@ export function scrubEvent<E extends Scrubbable>(event: E): E {
     if (typeof ex.value !== 'string') continue
     ex.value = scrubText(ex.type?.startsWith('PrismaClient') ? shortPrismaMessage(ex.value) : ex.value)
   }
-  if (event.user) event.user = event.user.id === undefined ? undefined : { id: event.user.id }
+  // Only the id survives; security events (captureSecurity) also keep the client IP.
+  if (event.user) {
+    const ip = event.tags?.security === 'true' && typeof event.user.ip_address === 'string' ? event.user.ip_address : undefined
+    const kept = { ...(event.user.id !== undefined && { id: event.user.id }), ...(ip && { ip_address: ip }) }
+    event.user = Object.keys(kept).length ? kept : undefined
+  }
   for (const b of event.breadcrumbs ?? []) {
     if (typeof b.message === 'string') b.message = scrubText(b.message)
     // Console breadcrumbs repeat the logged text in data.arguments.
