@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 import { prisma } from '@/lib/db'
 import { ACADEMIES } from '@/app/(site)/education/_lib/content'
 import { academyHref, allLessons, courseHref } from '@/app/(site)/education/_lib/rules'
-import { listPublicTools } from '@/app/(site)/tooling/_lib/queries'
+import { listPublicToolSlugs } from '@/app/(site)/tooling/_lib/queries'
 import { toolHref } from '@/app/(site)/tooling/_lib/rules'
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://hub.team1.network'
@@ -12,7 +12,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://hub.team1.network'
 export const dynamic = 'force-dynamic'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [events, tools] = await Promise.all([prisma.event.findMany({ where: { status: 'published' }, select: { slug: true, updatedAt: true } }), listPublicTools()])
+  const [events, tools] = await Promise.all([prisma.event.findMany({ where: { status: 'published' }, select: { slug: true, updatedAt: true } }), listPublicToolSlugs()])
   return [
     { url: siteUrl, changeFrequency: 'weekly', priority: 1 },
     { url: `${siteUrl}/events`, changeFrequency: 'daily', priority: 0.8 },

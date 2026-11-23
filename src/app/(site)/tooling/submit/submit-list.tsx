@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useActionToast } from '@/hooks/use-action-toast'
 import { submitToTooling, withdrawFromTooling } from '../_lib/actions'
-import { TOOLING_CONSENT } from '../_lib/rules'
+import { SUBMIT_BACK, TOOLING_CONSENT } from '../_lib/rules'
 
 export type SubmitRow = {
   projectId: string
@@ -72,7 +72,7 @@ export function SubmitList({ rows }: { rows: SubmitRow[] }) {
           </div>
           {row.closed?.by === 'reviewer' && (
             <p className="mt-4 text-sm text-fg-body">
-              team1 took it off /tooling{row.closed.reason ? <>: “{row.closed.reason}”</> : '.'} You can fix the project and submit it again for review.
+              team1 took it off /tooling{row.closed.reason ? <>: “{row.closed.reason}”</> : '.'}{!row.blocked && ' You can submit the changed project for review.'}
             </p>
           )}
           {row.rejected?.reason && <p className="mt-4 text-sm text-fg-body">team1: “{row.rejected.reason}”</p>}
@@ -86,7 +86,7 @@ export function SubmitList({ rows }: { rows: SubmitRow[] }) {
           ) : null}
           <div className="mt-5 flex flex-wrap items-center gap-2">
             {!row.blocked && row.problems.length === 0 && <SubmitButton row={row} />}
-            <Button asChild variant="outline"><Link href={`/projects/${row.slug}/edit`}><Pencil aria-hidden /> Edit project</Link></Button>
+            <Button asChild variant="outline"><Link href={`/projects/${row.slug}/edit?next=${SUBMIT_BACK}`}><Pencil aria-hidden /> Edit project</Link></Button>
             {(row.listed || row.pending) && (
               <ConfirmButton
                 size="default"

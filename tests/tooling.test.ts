@@ -2,8 +2,8 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { wasReplaced } from '@/app/(app)/projects/_lib/rules'
 import {
-  approveProblem, closedState, fold, initials, listingProblems, matchesQuery, newerVersion, PAGE_SIZE, SEAL_NOTE, TOOLING_CATEGORY, TOOLING_CONSENT,
-  submitBlock, toolLinks, viewTools, visibleRejectReason, type ListingState,
+  approveProblem, closedState, currentRejection, isRejectRetry, listingProblems, newerVersion, removalBoundary, removeProblem, SEAL_NOTE, submitBlock, TOOLING_CATEGORY, TOOLING_CONSENT,
+  toolSearchWhere, visibleRejectReason, type ListingState,
 } from '@/app/(site)/tooling/_lib/rules'
 
 const version = (extra: Partial<Parameters<typeof listingProblems>[0] & { id: string; number: number; sealedAt: Date | null }> = {}) => ({
@@ -46,10 +46,11 @@ test('approveProblem: sealed, newer than the listed one, still listable, open li
   assert.match(approveProblem(listing({ approvedVersion: ref(1), pendingVersion: ref(4) }), version(), false)!, /newer version \(4\)/)
   assert.match(approveProblem(pending, version({ maturity: 'archived' }), false)!, /still needs: Stage/)
   assert.match(approveProblem(listing({ approvedVersion: ref(2), rejectedVersionId: 'v3' }), version(), false)!, /was rejected/) // same rule as the hidden "newer"
+  assert.match(approveProblem(listing({ pendingVersion: ref(3), removedVersionId: 'v3' }), version(), false)!, /was removed/)
 })
 
-test('submitBlock: listed, waiting or rejected versions need an edit first; closed listings start over', () => {
-  const l = (extra = {}) => ({ closedAt: null, approvedVersionId: null, pendingVersionId: null, rejectedVersionId: null, ...extra })
+test('submitBlock: listed, waiting, rejected or removed versions need an edit first; closed listings start over', () => {
+  const l = (extra = {}) => ({ closedAt: null, approvedVersionId: null, pendingVersionId: null, rejectedVersionId: null, removedVersionId: null, ...extra })
   assert.equal(submitBlock(null, 'v1'), null)
   assert.equal(submitBlock(l(), 'v1'), null)
   assert.match(submitBlock(l({ approvedVersionId: 'v1' }), 'v1')!, /is listed/)
@@ -58,13 +59,54 @@ test('submitBlock: listed, waiting or rejected versions need an edit first; clos
   assert.match(submitBlock(l({ rejectedVersionId: 'v1', closedAt: new Date() }), 'v1')!, /wasn’t approved/) // withdrawing doesn't clear a rejection
   assert.equal(submitBlock(l({ approvedVersionId: 'v1', closedAt: new Date() }), 'v1'), null) // withdrawn: listing again needs review
   assert.equal(submitBlock(l({ approvedVersionId: 'v1', rejectedVersionId: 'v2' }), 'v3'), null)
+  // A removal is history: the removed version can't come back unchanged, also after a later withdraw or rejection.
+  assert.match(submitBlock(l({ removedVersionId: 'v1', closedAt: new Date() }), 'v1')!, /took this project off \/tooling at this version/)
+  assert.match(submitBlock(l({ removedVersionId: 'v1' }), 'v1')!, /took this project off \/tooling at this version/)
+  assert.equal(submitBlock(l({ removedVersionId: 'v1', closedAt: new Date() }), 'v2'), null) // edited: a new version
+})
+
+test('removeProblem: only a listed version is removed; a submission never listed is rejected', () => {
+  assert.equal(removeProblem({ closedAt: null, approvedVersionId: 'v1' }), null)
+  assert.match(removeProblem({ closedAt: null, approvedVersionId: null })!, /Reject the submission instead/)
+  assert.match(removeProblem({ closedAt: new Date(), approvedVersionId: null })!, /withdrawn or removed/)
+})
+
+test('removalBoundary: the newest of listed, pending and newest sealed, so an unsubmitted newer version is blocked too', () => {
+  assert.equal(removalBoundary([ref(1), null, ref(1)]), 'v1')
+  assert.equal(removalBoundary([ref(1), null, ref(2)]), 'v2') // v2 sealed but never submitted (shown as "Newer version")
+  assert.equal(removalBoundary([ref(1), ref(2), ref(3)]), 'v3')
+  assert.equal(removalBoundary([ref(1), ref(3), ref(2)]), 'v3')
+  assert.equal(removalBoundary([null, null, null]), null)
+})
+
+test('isRejectRetry: a lost response is a retry; an approval, resubmit or close since is a stale page', () => {
+  const at = (d: string) => new Date(`2026-11-${d}T12:00:00Z`)
+  const seen = { approvedVersionId: 'v2', pendingVersionId: 'v3' }
+  const l = (extra = {}) => ({ closedAt: null, approvedVersionId: 'v2', pendingVersionId: null, rejectedVersionId: 'v3', rejectedAt: at('20'), approvedAt: at('19'), ...extra })
+  assert.equal(isRejectRetry(l(), seen), true)
+  assert.equal(isRejectRetry(l({ approvedVersionId: 'v4', approvedAt: at('21') }), seen), false) // v4 approved since: stale tab
+  assert.equal(isRejectRetry(l({ pendingVersionId: 'v4' }), seen), false) // resubmitted since
+  assert.equal(isRejectRetry(l({ closedAt: at('21'), approvedVersionId: null }), seen), false)
+  assert.equal(isRejectRetry(l({ rejectedVersionId: 'v1' }), seen), false)
+  assert.equal(isRejectRetry(l(), { approvedVersionId: 'v2', pendingVersionId: null }), false)
+})
+
+test('currentRejection: the kept rejection only counts until the team resubmits, a reviewer approves or the listing closes', () => {
+  const at = (d: string) => new Date(`2026-11-${d}T12:00:00Z`)
+  const l = (extra = {}) => ({ closedAt: null, pendingVersionId: null, rejectedAt: at('20'), approvedAt: null, ...extra })
+  assert.equal(currentRejection(l()), true)
+  assert.equal(currentRejection(l({ approvedAt: at('19') })), true) // an update rejected, the older version still listed
+  assert.equal(currentRejection(l({ pendingVersionId: 'v4' })), false) // resubmitted
+  assert.equal(currentRejection(l({ approvedAt: at('21') })), false) // a newer version approved since
+  assert.equal(currentRejection(l({ closedAt: at('21') })), false)
+  assert.equal(currentRejection(l({ rejectedAt: null })), false)
 })
 
 test('closedState: a removal shows the reviewer and reason to the team; a withdraw shows no reason', () => {
   const now = new Date()
-  assert.equal(closedState({ closedAt: null, closedReason: null, closedNote: null }), null)
-  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', closedNote: 'Repo was deleted' }), { by: 'reviewer', reason: 'Repo was deleted' })
-  assert.deepEqual(closedState({ closedAt: now, closedReason: 'withdrawn', closedNote: null }), { by: 'team', reason: null })
+  assert.equal(closedState({ closedAt: null, closedReason: null, removedReason: 'Old removal' }), null) // resubmitted: the removal is history
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', removedReason: 'Repo was deleted' }), { by: 'reviewer', reason: 'Repo was deleted' })
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'withdrawn', removedReason: 'Old removal' }), { by: 'team', reason: null })
 })
 
 test('visibleRejectReason hides internal reasons from the team', () => {
@@ -82,46 +124,9 @@ test('consent wording names the public list and later versions', () => {
   assert.match(TOOLING_CONSENT, /later versions approved by team1/)
 })
 
-test('fold and matchesQuery: every word, any field, case and accents ignored', () => {
-  assert.equal(fold('ÉVALANCHE'), 'evalanche')
-  assert.equal(matchesQuery(['Wallet Kit', 'Login button for apps'], undefined), true)
-  assert.equal(matchesQuery(['Wallet Kit', 'Login button for apps'], '  '), true)
-  assert.equal(matchesQuery(['Wallet Kit', 'Login button for apps'], 'LOGIN kit'), true)
-  assert.equal(matchesQuery(['Wallet Kit', 'Login button for apps'], 'login rust'), false)
-})
-
-test('viewTools: search on name and short description, pages of PAGE_SIZE, clamped', () => {
-  const tools = Array.from({ length: PAGE_SIZE + 2 }, (_, i) => ({ slug: `t${i}`, name: `Tool ${i}`, shortDescription: i === 5 ? 'special' : 'plain', logoUrl: null }))
-  const p1 = viewTools(tools, { page: 1 })
-  assert.equal(p1.tools.length, PAGE_SIZE)
-  assert.equal(p1.hasMore, true)
-  assert.equal(p1.found, PAGE_SIZE + 2)
-  assert.deepEqual(viewTools(tools, { page: 2 }).tools.map((t) => t.slug), [`t${PAGE_SIZE}`, `t${PAGE_SIZE + 1}`])
-  assert.equal(viewTools(tools, { page: 99 }).page, 2)
-  assert.deepEqual(viewTools(tools, { q: 'special', page: 1 }).tools.map((t) => t.slug), ['t5'])
-  assert.equal(viewTools([], { page: 3 }).page, 1)
-})
-
-test('toolLinks: website first, then code, demos, video, other sites; duplicates and non-http dropped', () => {
-  assert.deepEqual(
-    toolLinks({
-      websiteUrl: 'https://a.dev', githubRepos: ['https://github.com/a/b', 'https://github.com/a/c'], demoLinks: ['https://a.dev'], videoUrl: 'https://youtu.be/x',
-      websites: [{ tag: 'Docs', url: 'https://docs.a.dev' }, { tag: ' ', url: 'https://blog.a.dev' }, { tag: 'Bad', url: 'javascript:alert(1)' }],
-    }),
-    [
-      { label: 'Website', url: 'https://a.dev' },
-      { label: 'Code 1', url: 'https://github.com/a/b' },
-      { label: 'Code 2', url: 'https://github.com/a/c' },
-      { label: 'Video', url: 'https://youtu.be/x' },
-      { label: 'Docs', url: 'https://docs.a.dev' },
-      { label: 'Link', url: 'https://blog.a.dev' },
-    ],
-  )
-  assert.deepEqual(toolLinks({ websiteUrl: null, githubRepos: ['https://github.com/a/b'], demoLinks: [], videoUrl: null, websites: null }), [{ label: 'Code', url: 'https://github.com/a/b' }])
-})
-
-test('initials', () => {
-  assert.equal(initials('AVAX Toolkit'), 'AT')
-  assert.equal(initials('Wolfie'), 'WO')
-  assert.equal(initials('***'), '?')
+test('toolSearchWhere: every word in the name or the short description, case-insensitive; empty = no filter', () => {
+  assert.equal(toolSearchWhere(undefined), undefined)
+  assert.equal(toolSearchWhere('   '), undefined)
+  const word = (w: string) => ({ OR: [{ name: { contains: w, mode: 'insensitive' } }, { shortDescription: { contains: w, mode: 'insensitive' } }] })
+  assert.deepEqual(toolSearchWhere(' wallet  kit '), { AND: [word('wallet'), word('kit')] })
 })

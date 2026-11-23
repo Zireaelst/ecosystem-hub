@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getListingForReview } from '@/app/(site)/tooling/_lib/queries'
-import { approveProblem } from '@/app/(site)/tooling/_lib/rules'
+import { approveProblem, removeProblem } from '@/app/(site)/tooling/_lib/rules'
 import { BackLink } from '@/components/back-link'
 import { PageHeader } from '@/components/layout/page-header'
 import { ProjectVersionView } from '@/components/project-version-view'
@@ -23,7 +23,7 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
   const name = (l.pendingVersion ?? l.newer ?? l.approvedVersion ?? l.project.currentVersion)?.name ?? l.project.slug
   // The versions a reviewer can act on: the submitted one, and a newer one the team saved since.
   const candidates = [
-    ...(l.pendingVersion ? [{ v: l.pendingVersion, title: `Waiting for review: version ${l.pendingVersion.number}`, description: `Submitted ${day(l.submittedAt)}, public listing agreed ${day(l.consentAt)}.`, pending: true }] : []),
+    ...(l.pendingVersion ? [{ v: l.pendingVersion, title: `Waiting for review: version ${l.pendingVersion.number}`, description: `Submitted by ${l.names.submitted} on ${day(l.submittedAt)}.`, pending: true }] : []),
     ...(l.newer ? [{ v: l.newer, title: `Newer version ${l.newer.number}`, description: 'Saved by the team after the last submission. You can approve it without a resubmit; they agreed to later versions being listed.', pending: false }] : []),
   ]
   return (
@@ -38,13 +38,20 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
             {l.approvedVersion && <StatusPill tone="success">Listed: version {l.approvedVersion.number} since {day(l.approvedAt)}</StatusPill>}
             {!l.closedAt && !l.approvedVersion && <StatusPill>{l.pendingVersion ? 'Not listed yet' : 'Nothing listed or waiting'}</StatusPill>}
           </div>
-          {l.closedReason === 'removed' && l.closedNote && <p className="mt-4 text-sm text-fg-body">Removal reason (the team sees it): “{l.closedNote}”</p>}
-          {l.rejectedAt && (
-            <p className="mt-4 text-sm text-fg-body">
-              Last rejection {day(l.rejectedAt)}{l.rejectReason ? <>: “{l.rejectReason}”</> : ''} {l.rejectReason && <span className="text-fg-muted">({l.rejectReasonInternal ? 'internal' : 'the team sees it'})</span>}
-            </p>
-          )}
-          {!l.closedAt && (l.approvedVersion || l.pendingVersion) && <div className="mt-4"><RemoveButton seen={seen} /></div>}
+          {/* Who did what: the latest of each, kept on the listing (the full history is in the audit log). Names only, no emails. */}
+          <ul className="mt-4 space-y-1.5 text-sm text-fg-body">
+            {l.submittedAt && <li>Submitted by {l.names.submitted} on {day(l.submittedAt)}, public listing agreed by {l.names.consent} on {day(l.consentAt)}.</li>}
+            {l.approvedAt && <li>{l.approvedVersion ? 'Approved' : 'Last approved'} by {l.names.approved} on {day(l.approvedAt)}{l.approvedVersion ? ` (version ${l.approvedVersion.number})` : ', not listed now'}.</li>}
+            {l.rejectedAt && (
+              <li>
+                Last rejected by {l.names.rejected} on {day(l.rejectedAt)}{l.numbers.rejected ? ` (version ${l.numbers.rejected})` : ''}{l.rejectReason ? <>: “{l.rejectReason}”</> : '.'}{' '}
+                {l.rejectReason && <span className="text-fg-muted">({l.rejectReasonInternal ? 'internal' : 'shared with the team'})</span>}
+              </li>
+            )}
+            {l.removedAt && <li>Removed by {l.names.removed} on {day(l.removedAt)}{l.numbers.removed ? ` (versions up to ${l.numbers.removed})` : ''}: “{l.removedReason}”</li>}
+            {l.closedAt && l.closedReason === 'withdrawn' && <li>Withdrawn by {l.names.closed} on {day(l.closedAt)}.</li>}
+          </ul>
+          {!removeProblem(l) && <div className="mt-4"><RemoveButton seen={seen} /></div>}
         </SectionCard>
         {candidates.map(({ v, title, description, pending }) => {
           const problem = approveProblem(l, v, archived)
@@ -55,7 +62,7 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
                 {!problem && <ApproveButton seen={seen} versionId={v.id} number={v.number} />}
                 {pending && <RejectButton seen={seen} number={v.number} />}
               </div>
-              <ProjectVersionView version={v} />
+              <ProjectVersionView version={v} hideCountry />
             </SectionCard>
           )
         })}
@@ -63,7 +70,7 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
           <SectionCard title={`Listed version ${l.approvedVersion.number}`}>
             <details>
               <summary className="cursor-pointer text-sm text-fg-muted">Show this version</summary>
-              <div className="mt-6"><ProjectVersionView version={l.approvedVersion} /></div>
+              <div className="mt-6"><ProjectVersionView version={l.approvedVersion} hideCountry /></div>
             </details>
           </SectionCard>
         )}

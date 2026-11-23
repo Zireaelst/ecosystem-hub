@@ -1,5 +1,4 @@
-import { cn } from '@/lib/utils'
-import { initials } from '../_lib/rules'
+import { cn, initials } from '@/lib/utils'
 
 /** The project's logo (an own upload), or its initials when it has none. Decorative: the name is always next to it. */
 export function ToolLogo({ tool, size, className }: { tool: { name: string; logoUrl: string | null }; size: number; className?: string }) {

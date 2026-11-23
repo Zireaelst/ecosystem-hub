@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
 import { requireUser } from '@/lib/guards'
 import { listMyToolingProjects } from '../_lib/queries'
-import { closedState, listingProblems, submitBlock, TOOLING_CATEGORY, visibleRejectReason } from '../_lib/rules'
+import { closedState, currentRejection, listingProblems, SUBMIT_BACK, submitBlock, TOOLING_CATEGORY, visibleRejectReason } from '../_lib/rules'
 import { SubmitList, type SubmitRow } from './submit-list'
 
 export const metadata: Metadata = { title: 'Submit to Tooling', robots: { index: false } }
@@ -25,7 +25,7 @@ export default async function SubmitToolPage() {
       listed: open?.approvedVersion?.number ?? null,
       pending: open?.pendingVersion?.number ?? null,
       closed: l ? closedState(l) : null,
-      rejected: open?.rejectedAt ? { reason: visibleRejectReason(open) } : null,
+      rejected: l && currentRejection(l) ? { reason: visibleRejectReason(l) } : null,
       problems: listingProblems(v),
       blocked: submitBlock(l, v.id),
       update: !!open?.approvedVersionId,
@@ -42,7 +42,7 @@ export default async function SubmitToolPage() {
         {rows.length ? (
           <SubmitList rows={rows} />
         ) : (
-          <EmptyState title="No projects yet" action={<Button asChild><Link href="/projects/new"><Plus aria-hidden /> New project</Link></Button>}>
+          <EmptyState title="No projects yet" action={<Button asChild><Link href={`/projects/new?next=${SUBMIT_BACK}`}><Plus aria-hidden /> New project</Link></Button>}>
             Create a hub project for your tool first. Projects you own or can edit show up here.
           </EmptyState>
         )}

@@ -54,7 +54,7 @@ export function RemoveButton({ seen }: { seen: Seen }) {
     <FormDialog
       trigger={<Button variant="ghost" className="text-destructive hover:text-destructive"><Trash2 aria-hidden /> Remove listing</Button>}
       title="Remove listing"
-      description="Takes the project off /tooling and out of review right away. The team sees your reason and can submit it again for review."
+      description="Takes the project off /tooling and out of review right away. The team sees your reason and can submit a changed version for review; this version can’t come back unchanged."
       submitLabel="Remove"
       pending={pending}
       onOpenChange={(o) => !o && setReason('')}

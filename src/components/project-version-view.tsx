@@ -28,8 +28,12 @@ function LinkButton({ href, icon, children }: { href: string; icon: React.ReactN
   )
 }
 
-/** Read-only rendering of one immutable project version (project page, submissions, judging). */
-export function ProjectVersionView({ version: v }: { version: ProjectVersion }) {
+/**
+ * Read-only rendering of one immutable project version (project page, submissions, judging, /tooling).
+ * `hideCountry`: the country is where the team is based - pages that show no team data hide it. `titleAs="h1"` when the name is the page title.
+ */
+export function ProjectVersionView({ version: v, hideCountry = false, titleAs: Title = 'h2' }: { version: ProjectVersion; hideCountry?: boolean; titleAs?: 'h1' | 'h2' }) {
+  const country = hideCountry ? null : v.country
   const websites = (v.websites as Tagged[]) ?? []
   const socials = (v.socials as Tagged[]) ?? []
   const addresses = (v.deployedAddresses as { tag: string; address: string; network?: string }[]) ?? []
@@ -49,12 +53,12 @@ export function ProjectVersionView({ version: v }: { version: ProjectVersion }) 
           <span className="grid size-16 shrink-0 place-items-center rounded-2xl border border-line bg-surface-1 text-xl text-brand">{initials(v.name)}</span>
         )}
         <div className="min-w-0">
-          <h2 className="text-2xl sm:text-3xl">{v.name}</h2>
+          <Title className="text-2xl sm:text-3xl">{v.name}</Title>
           <p className="mt-1 text-lg text-fg-muted">{v.shortDescription}</p>
-          {(maturity || v.country || v.launchDate || categories.length > 0) && (
+          {(maturity || country || v.launchDate || categories.length > 0) && (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-fg-faint">
               {maturity && <Badge variant="outline" title={maturity.hint}>Stage: {maturity.label}</Badge>}
-              {v.country && <span>{flagEmoji(v.country)} {countryName(v.country)}</span>}
+              {country && <span>{flagEmoji(country)} {countryName(country)}</span>}
               {v.launchDate && <span>Launched {new Date(v.launchDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}</span>}
               {categories.join(' / ')}
             </p>

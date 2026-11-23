@@ -18,7 +18,10 @@ CREATE TABLE "tooling_listings" (
     "closedAt" TIMESTAMP(3),
     "closedById" TEXT,
     "closedReason" TEXT,
-    "closedNote" TEXT,
+    "removedVersionId" TEXT,
+    "removedAt" TIMESTAMP(3),
+    "removedById" TEXT,
+    "removedReason" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -29,10 +32,10 @@ CREATE TABLE "tooling_listings" (
 CREATE UNIQUE INDEX "tooling_listings_projectId_key" ON "tooling_listings"("projectId");
 
 -- AddForeignKey
-ALTER TABLE "tooling_listings" ADD CONSTRAINT "tooling_listings_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tooling_listings" ADD CONSTRAINT "tooling_listings_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tooling_listings" ADD CONSTRAINT "tooling_listings_approvedVersionId_fkey" FOREIGN KEY ("approvedVersionId") REFERENCES "project_versions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tooling_listings" ADD CONSTRAINT "tooling_listings_approvedVersionId_fkey" FOREIGN KEY ("approvedVersionId") REFERENCES "project_versions"("id") ON DELETE NO ACTION ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tooling_listings" ADD CONSTRAINT "tooling_listings_pendingVersionId_fkey" FOREIGN KEY ("pendingVersionId") REFERENCES "project_versions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tooling_listings" ADD CONSTRAINT "tooling_listings_pendingVersionId_fkey" FOREIGN KEY ("pendingVersionId") REFERENCES "project_versions"("id") ON DELETE NO ACTION ON UPDATE CASCADE;

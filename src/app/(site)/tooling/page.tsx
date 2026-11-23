@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button'
 import { canonical } from '@/lib/metadata'
 import { pageParam, textParam } from '@/lib/params'
 import { ToolCard } from './_components/tool-card'
-import { listPublicTools } from './_lib/queries'
-import { QUERY_MAX, viewTools } from './_lib/rules'
+import { anyPublicTool, listPublicTools } from './_lib/queries'
+import { QUERY_MAX } from './_lib/rules'
 
 export const metadata: Metadata = {
   title: 'Tooling',
@@ -21,37 +21,37 @@ export const metadata: Metadata = {
 export default async function ToolingPage({ searchParams }: { searchParams: Promise<{ q?: string | string[]; page?: string | string[] }> }) {
   const sp = await searchParams
   const q = textParam(sp.q, QUERY_MAX)
-  const all = await listPublicTools()
-  const view = viewTools(all, { q, page: pageParam(sp.page) })
-  const total = all.length
+  const page = pageParam(sp.page)
+  const { tools, hasMore } = await listPublicTools({ q, page })
+  // An empty first page without a search means nothing is listed; otherwise ask the database once.
+  const any = tools.length > 0 || (q || page > 1 ? await anyPublicTool() : false)
+  const outOfRange = tools.length === 0 && page > 1
+  const firstPage = q ? `/tooling?${new URLSearchParams({ q })}` : '/tooling'
   return (
     <div className="container-page py-14 sm:py-20">
-      <SectionHeading title={<>Tooling<span className="text-brand">.</span></>}>
+      <SectionHeading as="h1" title={<>Tooling<span className="text-brand">.</span></>}>
         Developer tools built by Avalanche builders. team1 reviews each project before it is listed, but hasn&apos;t audited the code.
       </SectionHeading>
 
       {/* keyed on the view: links (clear, pager, back/forward) reset any unsubmitted text in the box */}
-      {total > 0 && <SearchForm key={`${q ?? ''}#${view.page}`} q={q} placeholder="Search tools" />}
+      {any && <SearchForm key={`${q ?? ''}#${page}`} q={q} placeholder="Search tools" />}
 
-      {view.tools.length > 0 ? (
-        <>
-          <p className="meta mt-8" aria-live="polite">
-            {q ? `${view.found} of ${total} ${total === 1 ? 'tool' : 'tools'} match “${q}”` : `${total} ${total === 1 ? 'tool' : 'tools'}`}
-          </p>
-          <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {view.tools.map((t) => <li key={t.slug}><ToolCard tool={t} /></li>)}
-          </ul>
-        </>
+      {tools.length > 0 ? (
+        <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {tools.map((t) => <li key={t.slug}><ToolCard tool={t} /></li>)}
+        </ul>
+      ) : outOfRange ? (
+        <EmptyState className="mt-8" title="No tools on this page" action={<Button asChild variant="outline"><Link href={firstPage}>Back to first page</Link></Button>} />
       ) : (
         <EmptyState
           className="mt-8"
-          title={total === 0 ? 'No tools listed yet' : `No tools match “${q}”`}
+          title={q && any ? `No tools match “${q}”` : 'No tools listed yet'}
           action={q && <Button asChild variant="outline"><Link href="/tooling">Clear search</Link></Button>}
         >
-          {total === 0 ? 'Builders’ projects show up here once team1 has reviewed them.' : 'Try fewer or different words.'}
+          {q && any ? 'Try fewer or different words.' : 'Builders’ projects show up here once team1 has reviewed them.'}
         </EmptyState>
       )}
-      <Pager page={view.page} hasMore={view.hasMore} params={{ q }} />
+      {!outOfRange && <Pager page={page} hasMore={hasMore} params={{ q }} />}
 
       <section aria-labelledby="submit-heading" className="mt-20 border-t border-line pt-12">
         <h2 id="submit-heading" className="text-2xl">Built a tool?</h2>
