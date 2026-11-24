@@ -58,6 +58,11 @@ test('scrubText leaves ordinary text alone', () => {
 test('reduces user to id', () => {
   assert.deepEqual(scrubEvent({ user: { id: 'u1', email: 'a@x.io', ip_address: '1.2.3.4' } }).user, { id: 'u1' })
   assert.equal(scrubEvent({ user: { email: 'a@x.io' } }).user, undefined)
+  assert.equal(scrubEvent({ user: { ip_address: '1.2.3.4' } }).user, undefined)
+})
+
+test('security events keep the client ip', () => {
+  assert.deepEqual(scrubEvent({ tags: { security: 'true' }, user: { email: 'a@x.io', ip_address: '1.2.3.4' } }).user, { ip_address: '1.2.3.4' })
 })
 
 test('strips the query from the Next.js request path', () => {

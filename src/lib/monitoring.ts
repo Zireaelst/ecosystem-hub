@@ -19,12 +19,14 @@ export function sentryServerOptions(): NodeOptions | undefined {
     enableOpenTelemetrySetup: false,
     // No session envelopes, only errors.
     integrations: (defaults) => defaults.filter((i) => i.name !== 'ProcessSession'),
+    // Security events are messages: a synthetic stack (minified server frames) makes GlitchTip title them "a" / "?".
+    attachStacktrace: false,
     dataCollection: DATA_COLLECTION,
     beforeSend: scrubEvent,
   }
 }
 
-const user = (userId?: string) => (userId ? { id: userId } : undefined)
+const user = (userId?: string, ip?: string) => (userId || ip ? { ...(userId && { id: userId }), ...(ip && { ip_address: ip }) } : undefined)
 
 /** Returns the event id (shown to the user as a short ref), or undefined when GlitchTip is off. */
 export function captureError(err: unknown, ctx?: Ctx): string | undefined {
@@ -37,9 +39,10 @@ export function captureError(err: unknown, ctx?: Ctx): string | undefined {
 }
 
 /** One GlitchTip issue per security event type (fingerprint), tagged `security`. */
-export function captureSecurity(type: string, level: 'warning' | 'error', ctx: Ctx & { extra?: Record<string, unknown> }): void {
+/** The client IP goes into GlitchTip's standard user.ip_address (security events only), so a source can be found and blocked. */
+export function captureSecurity(type: string, level: 'warning' | 'error', ctx: Ctx & { ip?: string; extra?: Record<string, unknown> }): void {
   try {
     if (!Sentry.getClient()) return
-    Sentry.captureMessage(type, { level, fingerprint: [type], tags: { ...ctx.tags, security: 'true' }, user: user(ctx.userId), extra: ctx.extra })
+    Sentry.captureMessage(type, { level, fingerprint: [type], tags: { ...ctx.tags, security: 'true' }, user: user(ctx.userId, ctx.ip), extra: ctx.extra })
   } catch {}
 }

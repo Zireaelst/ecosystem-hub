@@ -39,8 +39,8 @@ export function securityEvent(type: SecurityEventType, ctx: Ctx = {}): void {
       }
     }
     if (alert) safe(() => void sendSystemAlert(alert).catch((err) => logger.error({ err }, 'security alert failed')))
-    if (capture) safe(() => captureSecurity(type, 'warning', { userId: ctx.userId, tags, extra: ctx.detail }))
-    if (alert) safe(() => captureSecurity('security.alert', 'error', { userId: ctx.userId, tags, extra: { title: alert.title } }))
+    if (capture) safe(() => captureSecurity(type, 'warning', { userId: ctx.userId, ip: ctx.ip ?? undefined, tags, extra: ctx.detail }))
+    if (alert) safe(() => captureSecurity('security.alert', 'error', { userId: ctx.userId, ip: ctx.ip ?? undefined, tags, extra: { title: alert.title } }))
   } catch (err) {
     try {
       logger.error({ err }, 'securityEvent failed')
