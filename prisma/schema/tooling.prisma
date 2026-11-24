@@ -1,0 +1,45 @@
+// Developer Tooling list (/tooling): builders submit a sealed version of their project, team1
+// reviewers (`tooling.review`) approve or reject it. Rules in src/app/(site)/tooling/_lib/rules.ts,
+// area docs in src/app/(site)/tooling/AGENTS.md.
+
+/// One row per project. /tooling shows `approvedVersion` (only ever set by a reviewer);
+/// `pendingVersion` waits for review. Both point at SEALED versions, which never change.
+model ToolingListing {
+  id                   String          @id @default(cuid())
+  projectId            String          @unique
+  project              Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvedVersionId    String?
+  approvedVersion      ProjectVersion? @relation("ToolingApproved", fields: [approvedVersionId], references: [id], onDelete: NoAction)
+  approvedAt           DateTime?
+  approvedById         String?
+  pendingVersionId     String?
+  pendingVersion       ProjectVersion? @relation("ToolingPending", fields: [pendingVersionId], references: [id], onDelete: NoAction)
+  submittedAt          DateTime?
+  submittedById        String?
+  /// Agreement to be listed publicly, given with the latest submission (TOOLING_CONSENT)
+  consentAt            DateTime?
+  consentById          String?
+  /// The latest rejection. Kept when the team resubmits, so reviewers see it (`currentRejection` says whether it is still the latest event)
+  rejectedVersionId    String?
+  rejectedAt           DateTime?
+  rejectedById         String?
+  rejectReason         String?
+  /// true = only reviewers see the reason
+  rejectReasonInternal Boolean         @default(false)
+  /// Set when the team withdraws or a reviewer removes the listing (nothing listed or pending then); cleared by the next submission
+  closedAt             DateTime?
+  closedById           String?
+  /// withdrawn | removed
+  closedReason         String?
+  /// The latest removal by a reviewer. Kept when the team resubmits, so the next reviewer sees why it was taken down;
+  /// `removedVersionId` (the newest version a reviewer could have seen, `removalBoundary`) can't be resubmitted unchanged
+  removedVersionId     String?
+  removedAt            DateTime?
+  removedById          String?
+  /// Required on remove; shown to the team and to reviewers
+  removedReason        String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@map("tooling_listings")
+}
