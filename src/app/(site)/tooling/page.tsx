@@ -13,8 +13,8 @@ import { anyPublicTool, listPublicTools } from './_lib/queries'
 import { QUERY_MAX } from './_lib/rules'
 
 export const metadata: Metadata = {
-  title: 'Tooling',
-  description: 'Developer tools built by Avalanche builders, reviewed by team1 before they are listed.',
+  title: 'Community Tools',
+  description: 'Developer tools built by builders in the Avalanche community, reviewed by team1 before they are listed.',
   ...canonical('/tooling'),
 }
 
@@ -29,12 +29,11 @@ export default async function ToolingPage({ searchParams }: { searchParams: Prom
   const firstPage = q ? `/tooling?${new URLSearchParams({ q })}` : '/tooling'
   return (
     <div className="container-page py-14 sm:py-20">
-      <SectionHeading as="h1" title={<>Tooling<span className="text-brand">.</span></>}>
-        Developer tools built by Avalanche builders. team1 reviews each project before it is listed, but hasn&apos;t audited the code.
+      <SectionHeading as="h1" title={<>Community Tools<span className="text-brand">.</span></>}>
+        Developer tools built and run by builders in the Avalanche community, not by team1. Team1 reviews each project before it is listed, but hasn&apos;t audited the code.
       </SectionHeading>
 
-      {/* keyed on the view: links (clear, pager, back/forward) reset any unsubmitted text in the box */}
-      {any && <SearchForm key={`${q ?? ''}#${page}`} q={q} placeholder="Search tools" />}
+      {any && <SearchForm q={q} placeholder="Search tools" />}
 
       {tools.length > 0 ? (
         <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -56,7 +55,7 @@ export default async function ToolingPage({ searchParams }: { searchParams: Prom
       <section aria-labelledby="submit-heading" className="mt-20 border-t border-line pt-12">
         <h2 id="submit-heading" className="text-2xl">Built a tool?</h2>
         <p className="mt-2 max-w-[60ch] text-fg-muted">
-          Submit your hub project if it is live and in the “Developer Tooling” category. team1 reviews it before it is listed.
+          Submit your hub project if it is live and in the “Developer Tooling” category. Team1 reviews it before it is listed here.
         </p>
         <Button asChild variant="outline" className="mt-6">
           <Link href="/tooling/submit">Submit your project <ArrowRight aria-hidden /></Link>

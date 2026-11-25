@@ -36,8 +36,10 @@ model ToolingListing {
   removedVersionId     String?
   removedAt            DateTime?
   removedById          String?
-  /// Required on remove; shown to the team and to reviewers
+  /// Optional; shown to reviewers, and to the team unless `removedReasonInternal`
   removedReason        String?
+  /// true = only reviewers see the removal reason
+  removedReasonInternal Boolean        @default(false)
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 

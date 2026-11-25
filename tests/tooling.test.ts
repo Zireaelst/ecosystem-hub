@@ -102,11 +102,13 @@ test('currentRejection: the kept rejection only counts until the team resubmits,
   assert.equal(currentRejection(l({ rejectedAt: null })), false)
 })
 
-test('closedState: a removal shows the reviewer and reason to the team; a withdraw shows no reason', () => {
+test('closedState: a removal shows the reviewer and reason to the team (not when internal); a withdraw shows no reason', () => {
   const now = new Date()
-  assert.equal(closedState({ closedAt: null, closedReason: null, removedReason: 'Old removal' }), null) // resubmitted: the removal is history
-  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', removedReason: 'Repo was deleted' }), { by: 'reviewer', reason: 'Repo was deleted' })
-  assert.deepEqual(closedState({ closedAt: now, closedReason: 'withdrawn', removedReason: 'Old removal' }), { by: 'team', reason: null })
+  assert.equal(closedState({ closedAt: null, closedReason: null, removedReason: 'Old removal', removedReasonInternal: false }), null) // resubmitted: the removal is history
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', removedReason: 'Repo was deleted', removedReasonInternal: false }), { by: 'reviewer', reason: 'Repo was deleted' })
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', removedReason: 'Reported by a partner', removedReasonInternal: true }), { by: 'reviewer', reason: null }) // internal: hidden from the team
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'removed', removedReason: null, removedReasonInternal: false }), { by: 'reviewer', reason: null }) // no reason given
+  assert.deepEqual(closedState({ closedAt: now, closedReason: 'withdrawn', removedReason: 'Old removal', removedReasonInternal: false }), { by: 'team', reason: null })
 })
 
 test('visibleRejectReason hides internal reasons from the team', () => {
@@ -120,7 +122,7 @@ test('a tooling seal is never labelled "replaced" on the project page', () => {
 })
 
 test('consent wording names the public list and later versions', () => {
-  assert.match(TOOLING_CONSENT, /listed publicly on \/tooling/)
+  assert.match(TOOLING_CONSENT, /listed publicly under Community Tools/)
   assert.match(TOOLING_CONSENT, /later versions approved by team1/)
 })
 

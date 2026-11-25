@@ -9,7 +9,7 @@ import { listMyToolingProjects } from '../_lib/queries'
 import { closedState, currentRejection, listingProblems, SUBMIT_BACK, submitBlock, TOOLING_CATEGORY, visibleRejectReason } from '../_lib/rules'
 import { SubmitList, type SubmitRow } from './submit-list'
 
-export const metadata: Metadata = { title: 'Submit to Tooling', robots: { index: false } }
+export const metadata: Metadata = { title: 'Submit a tool', robots: { index: false } }
 
 export default async function SubmitToolPage() {
   const user = await requireUser()
@@ -33,10 +33,10 @@ export default async function SubmitToolPage() {
   })
   return (
     <div className="container-page max-w-3xl py-10 sm:py-16">
-      <BackLink href="/tooling">Tooling</BackLink>
-      <h1 className="mt-6 text-3xl sm:text-4xl">Submit to Tooling</h1>
+      <BackLink href="/tooling">Community Tools</BackLink>
+      <h1 className="mt-6 text-3xl sm:text-4xl">Submit a tool</h1>
       <p className="mt-3 text-fg-muted">
-        Projects in the “{TOOLING_CATEGORY}” category that are live can be listed on /tooling. team1 reviews each submission; only the version they approve is shown, with your project’s name, logo, descriptions and links (not your team).
+        Projects in the “{TOOLING_CATEGORY}” category that are live can be listed under Community Tools. team1 reviews each submission; only the version they approve is shown, with your project’s name, logo, descriptions and links (not your team).
       </p>
       <div className="mt-10">
         {rows.length ? (

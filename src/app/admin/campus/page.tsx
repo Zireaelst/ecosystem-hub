@@ -11,7 +11,7 @@ import { countryName } from '@/lib/countries'
 import { prisma } from '@/lib/db'
 import { requirePermission } from '@/lib/guards'
 import { pageParam, textParam } from '@/lib/params'
-import { FilterChip } from './_components/filter-chip'
+import { FilterChip } from '@/components/filter-chip'
 
 export const metadata: Metadata = { title: 'Students' }
 
@@ -60,12 +60,14 @@ export default async function CampusStudentsPage({ searchParams }: { searchParam
   return (
     <>
       <PageHeader title="Students" description="Everyone with a university in their profile - students, faculty and staff. One row per university." />
-      <SearchForm q={q} placeholder="Search name, email or university" keep={Object.fromEntries(Object.entries({ kind, university, coordinator: params.coordinator }).filter((e): e is [string, string] => !!e[1]))} />
-      <div className="mb-4 flex flex-wrap gap-2">
-        <FilterChip href={href({ kind: undefined })} active={!kind}>All</FilterChip>
-        {UNIVERSITY_KINDS.map((k) => <FilterChip key={k.id} href={href({ kind: k.id })} active={kind === k.id}>{k.label}</FilterChip>)}
-        <FilterChip href={href({ coordinator: coordinator ? undefined : '1' })} active={coordinator}>Coordinator interest</FilterChip>
-        {university && <FilterChip href={href({ university: undefined })} active>{uni?.name ?? 'University'} ×</FilterChip>}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <SearchForm q={q} placeholder="Search name, email or university" keep={Object.fromEntries(Object.entries({ kind, university, coordinator: params.coordinator }).filter((e): e is [string, string] => !!e[1]))} className="mb-0 flex-1 basis-56" />
+        <div className="flex flex-wrap gap-2">
+          <FilterChip href={href({ kind: undefined })} active={!kind}>All</FilterChip>
+          {UNIVERSITY_KINDS.map((k) => <FilterChip key={k.id} href={href({ kind: k.id })} active={kind === k.id}>{k.label}</FilterChip>)}
+          <FilterChip href={href({ coordinator: coordinator ? undefined : '1' })} active={coordinator}>Coordinator interest</FilterChip>
+          {university && <FilterChip href={href({ university: undefined })} active>{uni?.name ?? 'University'} ×</FilterChip>}
+        </div>
       </div>
       <DataTable
         id="admin-campus-students"

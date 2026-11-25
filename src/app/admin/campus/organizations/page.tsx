@@ -11,7 +11,7 @@ import { countryName } from '@/lib/countries'
 import { prisma } from '@/lib/db'
 import { requirePermission } from '@/lib/guards'
 import { pageParam, textParam } from '@/lib/params'
-import { FilterChip } from '../_components/filter-chip'
+import { FilterChip } from '@/components/filter-chip'
 
 export const metadata: Metadata = { title: 'Universities & clubs' }
 
@@ -41,10 +41,12 @@ export default async function CampusOrganizationsPage({ searchParams }: { search
   return (
     <>
       <PageHeader title="Universities & clubs" description="Universities and clubs builders use. Universities come from the university list when picked; builders add missing ones and clubs - check those under To review." />
-      <div className="mb-4 flex flex-wrap gap-2">
-        {(Object.keys(VIEWS) as View[]).map((k) => <FilterChip key={k} href={`/admin/campus/organizations?view=${k}`} active={view === k}>{VIEWS[k]}</FilterChip>)}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <SearchForm q={q} placeholder="Search by name" keep={{ view }} className="mb-0 flex-1 basis-56" />
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(VIEWS) as View[]).map((k) => <FilterChip key={k} href={`/admin/campus/organizations?${new URLSearchParams({ view: k, ...(q ? { q } : {}) })}`} active={view === k}>{VIEWS[k]}</FilterChip>)}
+        </div>
       </div>
-      <SearchForm q={q} placeholder="Search by name" keep={{ view }} />
       <DataTable
         id="admin-campus-orgs"
         empty="Nothing here."

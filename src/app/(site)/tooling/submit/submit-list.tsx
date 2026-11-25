@@ -72,7 +72,7 @@ export function SubmitList({ rows }: { rows: SubmitRow[] }) {
           </div>
           {row.closed?.by === 'reviewer' && (
             <p className="mt-4 text-sm text-fg-body">
-              team1 took it off /tooling{row.closed.reason ? <>: “{row.closed.reason}”</> : '.'}{!row.blocked && ' You can submit the changed project for review.'}
+              team1 took it off the list{row.closed.reason ? <>: “{row.closed.reason}”</> : '.'}{!row.blocked && ' You can submit the changed project for review.'}
             </p>
           )}
           {row.rejected?.reason && <p className="mt-4 text-sm text-fg-body">team1: “{row.rejected.reason}”</p>}
@@ -91,7 +91,7 @@ export function SubmitList({ rows }: { rows: SubmitRow[] }) {
               <ConfirmButton
                 size="default"
                 disabled={pending}
-                message={`Take “${row.name}” off /tooling${row.pending ? ' and out of review' : ''}? You can submit it again later.`}
+                message={`Take “${row.name}” off the Community Tools list${row.pending ? ' and out of review' : ''}? You can submit it again later.`}
                 onConfirm={() => run(() => withdrawFromTooling({ projectId: row.projectId }), 'Withdrawn')}
               >
                 <Undo2 aria-hidden /> Withdraw

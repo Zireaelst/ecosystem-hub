@@ -23,10 +23,31 @@ export function ApproveButton({ seen, versionId, number }: { seen: Seen; version
   )
 }
 
-export function RejectButton({ seen, number }: { seen: Seen; number: number }) {
-  const { pending, run } = useActionToast()
+/** Optional reason + "internal" switch, shared by reject and remove. */
+function useReason() {
   const [reason, setReason] = useState('')
   const [internal, setInternal] = useState(false)
+  const reset = () => { setReason(''); setInternal(false) }
+  return { value: { reason, internal }, reset, setReason, setInternal }
+}
+
+function ReasonFields({ id, r }: { id: string; r: ReturnType<typeof useReason> }) {
+  return (
+    <>
+      <Field id={id} label="Reason (optional)">
+        <Textarea id={id} value={r.value.reason} maxLength={REJECT_REASON_MAX} rows={4} onChange={(e) => r.setReason(e.target.value)} />
+      </Field>
+      <label className="mt-4 flex items-start gap-3 text-sm">
+        <Checkbox className="mt-0.5" checked={r.value.internal} onCheckedChange={(c) => r.setInternal(c === true)} />
+        <span>Internal: only reviewers see the reason, not the team</span>
+      </label>
+    </>
+  )
+}
+
+export function RejectButton({ seen, number }: { seen: Seen; number: number }) {
+  const { pending, run } = useActionToast()
+  const r = useReason()
   return (
     <FormDialog
       trigger={<Button variant="outline"><X aria-hidden /> Reject</Button>}
@@ -34,35 +55,28 @@ export function RejectButton({ seen, number }: { seen: Seen; number: number }) {
       description="Anything already listed stays listed. The team can fix the project and submit again."
       submitLabel="Reject"
       pending={pending}
-      onSubmit={() => run(() => rejectListing({ ...seen, reason, internal }), 'Rejected')}
+      onOpenChange={(o) => !o && r.reset()}
+      onSubmit={() => run(() => rejectListing({ ...seen, ...r.value }), 'Rejected')}
     >
-      <Field id="reject-reason" label="Reason (optional)">
-        <Textarea id="reject-reason" value={reason} maxLength={REJECT_REASON_MAX} rows={4} onChange={(e) => setReason(e.target.value)} />
-      </Field>
-      <label className="mt-4 flex items-start gap-3 text-sm">
-        <Checkbox className="mt-0.5" checked={internal} onCheckedChange={(c) => setInternal(c === true)} />
-        <span>Internal: only reviewers see the reason, not the team</span>
-      </label>
+      <ReasonFields id="reject-reason" r={r} />
     </FormDialog>
   )
 }
 
 export function RemoveButton({ seen }: { seen: Seen }) {
   const { pending, run } = useActionToast()
-  const [reason, setReason] = useState('')
+  const r = useReason()
   return (
     <FormDialog
       trigger={<Button variant="ghost" className="text-destructive hover:text-destructive"><Trash2 aria-hidden /> Remove listing</Button>}
       title="Remove listing"
-      description="Takes the project off /tooling and out of review right away. The team sees your reason and can submit a changed version for review; this version can’t come back unchanged."
+      description="Takes the project off the list and out of review right away. The team can submit a changed version for review; this version can’t come back unchanged."
       submitLabel="Remove"
       pending={pending}
-      onOpenChange={(o) => !o && setReason('')}
-      onSubmit={() => run(() => removeListing({ ...seen, reason }), 'Removed')}
+      onOpenChange={(o) => !o && r.reset()}
+      onSubmit={() => run(() => removeListing({ ...seen, ...r.value }), 'Removed')}
     >
-      <Field id="remove-reason" label="Reason (the team sees it)">
-        <Textarea id="remove-reason" value={reason} required maxLength={REJECT_REASON_MAX} rows={4} onChange={(e) => setReason(e.target.value)} />
-      </Field>
+      <ReasonFields id="remove-reason" r={r} />
     </FormDialog>
   )
 }

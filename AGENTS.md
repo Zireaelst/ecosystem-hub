@@ -38,24 +38,26 @@ prisma/schema/<area>.prisma            the area's models (multi-file schema)
 ```
 - **Shared core** - `src/lib/*` (auth, session, permissions, guards, action, audit, db, mailer, api-keys, jobs, logger, monitoring, security-events) and `src/components/{ui,layout}`. Areas import from the core; the core never imports from an area except through the three registries below.
 - **Reads** = Server Components calling `queries.ts`. **Writes** = Server Actions in `actions.ts`, always wrapped in `action()`. `src/app/api/` is only for Better Auth (`api/auth`), `api/health`, the external `api/v1` and future webhooks - don't add internal JSON endpoints for the UI.
-- Never import another area's internals (`_components`, `_lib/queries`, …). If two areas need the same thing, move it to the core in its own PR.
+- Never import another area's internals (`_components`, `_lib/queries`, …). If two areas need the same thing, move it to the core in its own PR. Exception: top-level pages that bring areas together (`/`, `/ecosystem`) may show an area's public building blocks (its card component, its public list query).
 
 ### Adding an area - checklist
 1. Routes + private folders as above. Admin pages under `src/app/admin/<area>/`.
 2. Models in `prisma/schema/<area>.prisma` (`@@map` snake_case table names), then `pnpm db:migrate --name <area>-init`.
 3. Permission keys in `src/app/(site)/<area>/_lib/permissions.ts`, spread into `PERMISSIONS` in `src/lib/permissions.ts` (one line). See "Authorization".
-4. Admin nav entries in `_lib/nav.ts`, spread into `ADMIN_NAV` in `src/app/admin/_lib/nav.ts` (one line). Each entry's `show` must mirror its page guard.
-5. Jobs (if any) in `_lib/jobs/`, added to `JOBS` in `src/lib/jobs/index.ts` (one line).
-6. Public pages into `src/app/sitemap.ts`.
-7. Tests for the area's pure rules in `tests/<area>*.test.ts`.
-8. The area's rules in `<area>/AGENTS.md` + a `CLAUDE.md` containing only `@AGENTS.md`, linked from "Areas" below.
+4. Admin nav entries in `_lib/nav.ts`, spread into a group of `ADMIN_NAV` in `src/app/admin/_lib/nav.ts` (one line; groups: Programs, Campus, People, System - an area with several entries may get its own group). Each entry's `show` must mirror its page guard.
+   Numbers and open to-dos for `/admin` (Overview) in `_lib/overview.ts` (`OverviewSource[]`: `group`, `show` = the permission of the page they link to, `load` = counts only, no personal data), spread into `ADMIN_OVERVIEW` in `src/app/admin/_lib/overview.ts`.
+5. Launching later? Add a feature flag (see "Feature flags").
+6. Jobs (if any) in `_lib/jobs/`, added to `JOBS` in `src/lib/jobs/index.ts` (one line).
+7. Public pages into `src/app/sitemap.ts`.
+8. Tests for the area's pure rules in `tests/<area>*.test.ts`.
+9. The area's rules in `<area>/AGENTS.md` + a `CLAUDE.md` containing only `@AGENTS.md`, linked from "Areas" below.
 
 ## Security rules (non-negotiable)
 - **A `'use server'` file may export ONLY `action(...)`-wrapped functions.** Every export of such a file becomes a public endpoint; a helper that trusts its arguments (e.g. `assertManage(id, user)`) must live in a plain server module (`import 'server-only'`).
 - **Every server action goes through `action({ schema, permission }, handler)`** (`src/lib/action.ts`). Server actions are public POST endpoints - a page guard does not protect the action. `permission` is a registry key, `'superAdmin'`, or `'user'` (any signed-in user). Throw `ActionError('message')` for user-facing errors; anything else is logged and masked.
 - **Logging and monitoring:** log with `logger` (`src/lib/logger.ts`, pino, JSON to stdout), never `console` on the server (dev email code is the one exception). Pass errors as `logger.error({ err }, 'what failed')`, never inside the message string; error text that leaves the system (`sendSystemAlert`) goes through `safeErrorMessage`. A denied or suspicious request calls `securityEvent(type, …)` (`src/lib/security-events.ts`); types and alert thresholds live in `src/lib/security-rules.ts`. Per-object denials (someone else's hackathon, project, upload) throw `ForbiddenError`, not `ActionError`. Plain emails or IPs go only into `securityEvent`'s `email` / `ip` (hashed with `LOG_HASH_SECRET` in logs; the plain IP also goes to Monitoring as a security event's `user.ip_address`, to block a source), nowhere else. Errors go to Monitoring via the Sentry SDK (`monitoring.ts`, `monitoring-client.ts`, `sentry-scrub.ts`; browser reports tunnelled through `/monitoring`), errors only, no PII.
 - **Every admin page/layout calls a guard** (`src/lib/guards.ts`): `requireUser()`, `requirePermission(p)`, `requireSuperAdmin()`. Unauthenticated → `/sign-in?next=…`; lacking power → 404 (never reveal admin surfaces).
-- `src/proxy.ts` (Next 16's renamed middleware) only does the CSP nonce and a coarse cookie-presence wall for `/dashboard` and `/admin`. It is **not** authorization.
+- `src/proxy.ts` (Next 16's renamed middleware) only does the CSP nonce, a coarse cookie-presence wall for `/dashboard` and `/admin`, and the feature-flag 404 (see "Feature flags"). It is **not** authorization.
 - **Write an audit entry for every state-changing action**: `recordAudit({ actorId, action: 'thing.verb', entityType, entityId, before, after })` (`src/lib/audit.ts`) - diffs before/after, never throws. Never put secrets (API keys, hashes, tokens) in it.
 - Validate all input with Zod (inside `action()` / at the route). Never log secrets or PII.
 - `/api/v1/*` routes start with `requireApiKey(req, scope)` (`src/lib/api-keys.ts`) and answer via `v1Json` / `v1Error` (`{ success, data | error }`, no-store, no CORS). They take hashed identifiers (sha256 of lower(trim(email))), never plain emails. Keys are hashed, scoped by `API_SCOPES` (`src/lib/api-scopes.ts`, only ever add) and managed by super admins at `/admin/api-keys`.
@@ -81,6 +83,12 @@ prisma/schema/<area>.prisma            the area's models (multi-file schema)
 - Railway applies migrations on every web deploy (`preDeployCommand` in `railway.toml`). Write migrations that are safe while the previous version is still serving (add columns nullable/with defaults; drop in a later release).
 - Better Auth models (`prisma/schema/auth.prisma`) keep Better Auth's field names - don't rename them.
 
+## Feature flags
+- Switch a whole feature on or off without a deploy: registry `FLAGS` in `src/lib/flags.ts` (`{ label, description, default, paths }`, pure), values in `FeatureFlag` (`prisma/schema/flags.prisma`, no row = default), toggled by super admins at `/admin/flags` (audited `flag.set`, `sendSystemAlert` without names). Keys are persisted - **only ever add**.
+- **Off = off for everyone** (super admins too). Every URL under the flag's `paths` (e.g. `['/tooling']`) answers 404, enforced centrally in `src/proxy.ts` - pages need no check of their own (a check in `layout.tsx` wouldn't work: it doesn't stop a page from rendering). Keep an area's public pages under one prefix; never put `/admin/...` in `paths` - admin pages stay behind their permission, so reviewers can prepare a launch.
+- Read with `isFlagOn(key)` (`src/lib/flag-store.ts`, cached in memory for 30s, cleared on toggle - no query per request, no flicker) for what the proxy can't see: links to the feature (nav, other pages like `/ecosystem`), the sitemap, and the area's **server actions**: start each with `await requireFlag(key)` (refuses with an `ActionError` while off; action IDs work from any URL - a hidden page doesn't protect them).
+- A flag is not a permission: who may do what stays in `permissions.ts`.
+
 ## Background jobs
 - Registry in `src/lib/jobs/index.ts` (`JOBS`, `Job { name, cron (UTC), run(data?) → summary }`). Executed by the pg-boss worker (`src/worker.ts`, plain Node - never runs inside Next), a second Railway service from the same image (`railway.worker.toml`, `node /worker/worker.mjs`).
 - Every execution is a `JobRun` row (`running/success/partial/failed`, summary JSON; a non-empty `summary.failed` array = partial). `executeJob` never throws.
@@ -97,7 +105,9 @@ prisma/schema/<area>.prisma            the area's models (multi-file schema)
 - Icons: `lucide-react` only - don't add another icon library.
 - **Reuse before building** - check these first, extend them rather than hand-rolling a variant:
   - Forms: `Field` (label + control + hint), `FormDialog` (dialog wrapping one form; closes only on success), `ConfirmButton` (destructive + confirm), `NativeSelect` (`ui/native-select`), `ChipToggle` (multi-select chips), `AnswerFields` / `AnswerList` (organiser-defined questions), hook `useActionToast()` (run an action → toast → refresh; resolves `true` on success).
-  - Layout: `PageHeader`, `SectionCard`, `BackLink`, `LinkCard`, `EmptyState`, `SearchForm`, `Pager`, `Logo`, `SiteHeader`, `SiteFooter`.
+  - Tables: `DataTable` for every table (sort, hide/resize columns; `sort` prop for server-side sort on paginated lists) - no raw `ui/table`.
+  - Layout: `PageHeader`, `SectionCard`, `BackLink`, `LinkCard`, `EmptyState`, `SearchForm`, `Pager`, `Logo`, `SiteHeader`, `SiteFooter`. Admin pages render inside the admin shell (`src/app/admin/layout.tsx`: site header on top, then the page container with a sticky grouped sidebar, drawer below `lg`) - no own header.
+  - List toolbar: `SearchForm` (`?q=`, searches as you type, debounced) and `FilterChip` (URL filters as links) in one wrapping row: `<div className="mb-4 flex flex-wrap items-center gap-3">` + `SearchForm className="mb-0 flex-1 basis-56"`.
   - Dates: `DateTimeInput`, `TimeZoneSelect`.
   - Display: `StatusPill` (tones), `StageStateBadge`, `EventCover` (Luma covers, square), `Markdown`, `ProjectVersionView`.
   - shadcn primitives in `src/components/ui/*`. Add more with `pnpm dlx shadcn@latest add <name>` - **never `-o`** (it overwrites the tuned components) - and fix the `cn` import to `@/lib/utils` if the CLI writes `from "cn"`.

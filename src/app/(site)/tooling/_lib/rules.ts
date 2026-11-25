@@ -6,7 +6,7 @@ export const TOOLING_CATEGORY = 'Developer Tooling'
 /** Project stages that can be listed. */
 export const LISTABLE_STAGES: readonly string[] = ['live', 'established'] satisfies ProjectMaturity[]
 /** What the builder agrees to on submit; stored as `consentAt` / `consentById` on the listing. */
-export const TOOLING_CONSENT = 'If approved, this project and later versions approved by team1 will be listed publicly on /tooling.'
+export const TOOLING_CONSENT = 'If approved, this project and later versions approved by team1 will be listed publicly under Community Tools (/tooling).'
 export const REJECT_REASON_MAX = 1000
 /** Note on a version sealed by a tooling submission. Not `submissionNote()`: that prefix marks hackathon versions as "replaced" when no stage entry points at them. */
 export const SEAL_NOTE = 'Sent for Developer Tooling review'
@@ -80,10 +80,10 @@ export function submitBlock(l: { closedAt: Date | null; approvedVersionId: strin
   return null
 }
 
-/** Why the listing is off the list, for the team: removed by a reviewer (with their reason) or withdrawn by the team. */
-export function closedState(l: { closedAt: Date | null; closedReason: string | null; removedReason: string | null }): { by: 'team' | 'reviewer'; reason: string | null } | null {
+/** Why the listing is off the list, for the team: removed by a reviewer (with their reason unless it is internal) or withdrawn by the team. */
+export function closedState(l: { closedAt: Date | null; closedReason: string | null; removedReason: string | null; removedReasonInternal: boolean }): { by: 'team' | 'reviewer'; reason: string | null } | null {
   if (!l.closedAt) return null
-  return l.closedReason === 'removed' ? { by: 'reviewer', reason: l.removedReason } : { by: 'team', reason: null }
+  return l.closedReason === 'removed' ? { by: 'reviewer', reason: l.removedReasonInternal ? null : l.removedReason } : { by: 'team', reason: null }
 }
 
 /** Why a reviewer can't remove the listing, or null. Only a listed version is removed; a submission never listed is rejected. */
