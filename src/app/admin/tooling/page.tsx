@@ -68,6 +68,7 @@ export default async function ToolingAdminPage({ searchParams }: { searchParams:
         columns={[
           { key: 'name', label: 'Project', sortable: true, hideable: false },
           { key: 'status', label: 'Status' },
+          { key: 'submittedBy', label: 'Submitted by' },
           { key: 'submitted', label: 'Submitted', sortable: true, firstDir: 'desc', className: 'whitespace-nowrap' },
           { key: 'approved', label: 'Last approved', sortable: true, firstDir: 'desc', className: 'whitespace-nowrap' },
           { key: 'updated', label: 'Updated', sortable: true, firstDir: 'desc', className: 'whitespace-nowrap' },
@@ -77,6 +78,7 @@ export default async function ToolingAdminPage({ searchParams }: { searchParams:
           cells: {
             name: <Link href={`/admin/tooling/${r.id}`} className="text-fg-heading hover:underline">{r.project.currentVersion?.name ?? r.project.slug}</Link>,
             status: <Status r={r} />,
+            submittedBy: r.submittedBy ?? '-',
             submitted: day(r.submittedAt),
             approved: day(r.approvedAt),
             updated: day(r.updatedAt),

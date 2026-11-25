@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Pencil, Send, Undo2 } from 'lucide-react'
+import { EyeOff, Pencil, Send, Undo2 } from 'lucide-react'
 import { ConfirmButton } from '@/components/confirm-button'
 import { FormDialog } from '@/components/form-dialog'
 import { StatusPill } from '@/components/status-pill'
@@ -87,14 +87,24 @@ export function SubmitList({ rows }: { rows: SubmitRow[] }) {
           <div className="mt-5 flex flex-wrap items-center gap-2">
             {!row.blocked && row.problems.length === 0 && <SubmitButton row={row} />}
             <Button asChild variant="outline"><Link href={`/projects/${row.slug}/edit?next=${SUBMIT_BACK}`}><Pencil aria-hidden /> Edit project</Link></Button>
-            {(row.listed || row.pending) && (
+            {row.pending && (
+              <ConfirmButton
+                size="default"
+                disabled={pending}
+                message={`Take version ${row.pending} out of review?${row.listed ? ` Version ${row.listed} stays on the list.` : ''} You can submit it again later.`}
+                onConfirm={() => run(() => withdrawFromTooling({ projectId: row.projectId, what: 'submission' }), 'Submission withdrawn')}
+              >
+                <Undo2 aria-hidden /> Withdraw submission
+              </ConfirmButton>
+            )}
+            {row.listed && (
               <ConfirmButton
                 size="default"
                 disabled={pending}
                 message={`Take “${row.name}” off the Community Tools list${row.pending ? ' and out of review' : ''}? You can submit it again later.`}
-                onConfirm={() => run(() => withdrawFromTooling({ projectId: row.projectId }), 'Withdrawn')}
+                onConfirm={() => run(() => withdrawFromTooling({ projectId: row.projectId, what: 'listing' }), 'Unlisted')}
               >
-                <Undo2 aria-hidden /> Withdraw
+                <EyeOff aria-hidden /> Unlist
               </ConfirmButton>
             )}
           </div>

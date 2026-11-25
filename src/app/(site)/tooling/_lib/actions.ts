@@ -6,10 +6,14 @@ import { action, ActionError, ForbiddenError } from '@/lib/action'
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/db'
 import { requireFlag } from '@/lib/flag-store'
-import { approveProblem, isRejectRetry, listingProblems, removalBoundary, removeProblem, SEAL_NOTE, submitBlock, TOOLING_CONSENT } from './rules'
+import { PROJECT_PROGRAMS, recordProjectActivity } from '@/lib/project-activity'
+import { approveProblem, isRejectRetry, listingProblems, removalBoundary, removeProblem, SEAL_NOTE, submitBlock, TOOLING_CONSENT, withdrawPlan } from './rules'
 import { approveListingSchema, rejectListingSchema, removeListingSchema, submitListingSchema, withdrawListingSchema } from './schemas'
 
 const STALE = 'This listing changed since you opened it - reload the page'
+
+/** The common part of this listing's activity rows (`recordProjectActivity`). */
+const activity = (l: { id: string; projectId: string }, actorId: string) => ({ projectId: l.projectId, program: 'tooling' as const, targetId: l.id, targetName: PROJECT_PROGRAMS.tooling.label, actorId })
 
 function refresh() {
   revalidatePath('/tooling', 'layout')
@@ -55,6 +59,12 @@ export const submitToTooling = action({ schema: submitListingSchema, permission:
         closedAt: null, closedById: null, closedReason: null,
       },
     })
+    // A version still waiting (an open listing) is replaced by this one.
+    const replaced = !listing.closedAt && listing.pendingVersionId ? listing.pendingVersionId : null
+    await recordProjectActivity(tx, [
+      { ...activity(listing, user.id), versionId: version.id, event: 'submitted' },
+      ...(replaced ? [{ ...activity(listing, user.id), versionId: replaced, event: 'replaced' as const }] : []),
+    ])
     return { listingId: listing.id, version, changed: true }
   })
   if (out.changed) {
@@ -64,18 +74,33 @@ export const submitToTooling = action({ schema: submitListingSchema, permission:
   return { number: out.version.number, changed: out.changed }
 })
 
-/** The team takes the project off the list (and out of review) without a reviewer. */
-export const withdrawFromTooling = action({ schema: withdrawListingSchema, permission: 'user' }, async ({ projectId }, user) => {
+/** Without a reviewer, the team takes its submission back (a listed version stays listed) or unlists the project. */
+export const withdrawFromTooling = action({ schema: withdrawListingSchema, permission: 'user' }, async ({ projectId, what }, user) => {
   await requireFlag('tooling')
   await requireTeam(projectId, user.id)
   const listing = await prisma.toolingListing.findUnique({ where: { projectId } })
-  if (!listing || listing.closedAt) throw new ActionError('Nothing to withdraw')
-  const r = await prisma.toolingListing.updateMany({
-    where: { id: listing.id, closedAt: null },
-    data: { approvedVersionId: null, pendingVersionId: null, closedAt: new Date(), closedById: user.id, closedReason: 'withdrawn' },
+  const plan = listing && withdrawPlan(listing, what)
+  if (!plan) throw new ActionError('Nothing to withdraw')
+  // Only from the state just read: an approval in between must not turn "withdraw the submission" into an unlist.
+  await prisma.$transaction(async (tx) => {
+    const r = await tx.toolingListing.updateMany({
+      where: { id: listing.id, closedAt: null, approvedVersionId: listing.approvedVersionId, pendingVersionId: listing.pendingVersionId },
+      data: plan === 'pending'
+        ? { pendingVersionId: null }
+        : { approvedVersionId: null, pendingVersionId: null, closedAt: new Date(), closedById: user.id, closedReason: 'withdrawn' },
+    })
+    if (!r.count) throw new ActionError(STALE)
+    // Unlisting takes a version in review along; withdrawing only the submission leaves the listed one.
+    await recordProjectActivity(tx, [
+      ...(listing.pendingVersionId ? [{ ...activity(listing, user.id), versionId: listing.pendingVersionId, event: 'withdrawn' as const }] : []),
+      ...(plan === 'close' && listing.approvedVersionId ? [{ ...activity(listing, user.id), versionId: listing.approvedVersionId, event: 'unlisted' as const }] : []),
+    ])
   })
-  if (!r.count) throw new ActionError('Nothing to withdraw')
-  await recordAudit({ actorId: user.id, action: 'tooling.withdraw', entityType: 'ToolingListing', entityId: listing.id, before: { projectId, approvedVersionId: listing.approvedVersionId, pendingVersionId: listing.pendingVersionId }, after: { closedReason: 'withdrawn' } })
+  await recordAudit({
+    actorId: user.id, action: 'tooling.withdraw', entityType: 'ToolingListing', entityId: listing.id,
+    before: { projectId, approvedVersionId: listing.approvedVersionId, pendingVersionId: listing.pendingVersionId },
+    after: plan === 'pending' ? { pendingVersionId: null } : { approvedVersionId: null, pendingVersionId: null, closedReason: 'withdrawn' },
+  })
   refresh()
   return null
 })
@@ -99,11 +124,19 @@ export const approveListing = action({ schema: approveListingSchema, permission:
   if (!version || version.projectId !== listing.projectId) throw new ActionError('Version not found')
   const problem = approveProblem(listing, version, !!listing.project.archivedAt)
   if (problem) throw new ActionError(problem)
-  const r = await prisma.toolingListing.updateMany({
-    where: seenWhere(input),
-    data: { approvedVersionId: version.id, approvedAt: new Date(), approvedById: user.id, pendingVersionId: null },
+  await prisma.$transaction(async (tx) => {
+    const r = await tx.toolingListing.updateMany({
+      where: seenWhere(input),
+      data: { approvedVersionId: version.id, approvedAt: new Date(), approvedById: user.id, pendingVersionId: null },
+    })
+    if (!r.count) throw new ActionError(STALE)
+    // The listed version and an older one in review (approving a newer version directly) are replaced.
+    const replaced = [listing.approvedVersionId, listing.pendingVersionId].filter((v): v is string => !!v && v !== version.id)
+    await recordProjectActivity(tx, [
+      { ...activity(listing, user.id), versionId: version.id, event: 'approved' },
+      ...replaced.map((v) => ({ ...activity(listing, user.id), versionId: v, event: 'replaced' as const })),
+    ])
   })
-  if (!r.count) throw new ActionError(STALE)
   await recordAudit({ actorId: user.id, action: 'tooling.approve', entityType: 'ToolingListing', entityId: listing.id, before: { approvedVersionId: listing.approvedVersionId, pendingVersionId: listing.pendingVersionId }, after: { approvedVersionId: version.id, number: version.number } })
   refresh()
   return null
@@ -114,15 +147,20 @@ export const rejectListing = action({ schema: rejectListingSchema, permission: '
   if (!input.pendingVersionId) throw new ActionError('Nothing is waiting for review')
   const now = await prisma.toolingListing.findUnique({
     where: { id: input.listingId },
-    select: { closedAt: true, approvedVersionId: true, pendingVersionId: true, rejectedVersionId: true, rejectedAt: true, approvedAt: true },
+    select: { id: true, projectId: true, closedAt: true, approvedVersionId: true, pendingVersionId: true, rejectedVersionId: true, rejectedAt: true, approvedAt: true },
   })
+  if (!now) throw new ActionError('Listing not found')
   // The rejection stays on the row as history, so only a rejection that is still the latest event counts as a retry.
-  if (now && isRejectRetry(now, input)) return null
-  const r = await prisma.toolingListing.updateMany({
-    where: seenWhere(input),
-    data: { pendingVersionId: null, rejectedVersionId: input.pendingVersionId, rejectedAt: new Date(), rejectedById: user.id, rejectReason: input.reason, rejectReasonInternal: input.internal },
+  if (isRejectRetry(now, input)) return null
+  const pendingVersionId = input.pendingVersionId
+  await prisma.$transaction(async (tx) => {
+    const r = await tx.toolingListing.updateMany({
+      where: seenWhere(input),
+      data: { pendingVersionId: null, rejectedVersionId: pendingVersionId, rejectedAt: new Date(), rejectedById: user.id, rejectReason: input.reason, rejectReasonInternal: input.internal },
+    })
+    if (!r.count) throw new ActionError(STALE)
+    await recordProjectActivity(tx, [{ ...activity(now, user.id), versionId: pendingVersionId, event: 'rejected', reason: input.reason, reasonInternal: input.internal }])
   })
-  if (!r.count) throw new ActionError(STALE)
   await recordAudit({ actorId: user.id, action: 'tooling.reject', entityType: 'ToolingListing', entityId: input.listingId, before: { pendingVersionId: input.pendingVersionId }, after: { rejectReason: input.reason, internal: input.internal } })
   refresh()
   return null
@@ -136,7 +174,7 @@ export const removeListing = action({ schema: removeListingSchema, permission: '
   const now = await prisma.toolingListing.findUnique({
     where: { id: input.listingId },
     select: {
-      closedReason: true, closedAt: true, approvedVersion: { select: { id: true, number: true } }, pendingVersion: { select: { id: true, number: true } },
+      id: true, projectId: true, closedReason: true, closedAt: true, approvedVersion: { select: { id: true, number: true } }, pendingVersion: { select: { id: true, number: true } },
       project: { select: { versions: { where: { sealedAt: { not: null } }, orderBy: { number: 'desc' }, take: 1, select: { id: true, number: true } } } },
     },
   })
@@ -150,14 +188,20 @@ export const removeListing = action({ schema: removeListingSchema, permission: '
   // since the read, the seen guard refuses the update anyway.
   const removedVersionId = removalBoundary([now.approvedVersion, now.pendingVersion, now.project.versions[0] ?? null])
   const at = new Date()
-  const r = await prisma.toolingListing.updateMany({
-    where: seenWhere(input),
-    data: {
-      approvedVersionId: null, pendingVersionId: null, closedAt: at, closedById: user.id, closedReason: 'removed',
-      removedVersionId, removedAt: at, removedById: user.id, removedReason: input.reason, removedReasonInternal: input.internal,
-    },
+  await prisma.$transaction(async (tx) => {
+    const r = await tx.toolingListing.updateMany({
+      where: seenWhere(input),
+      data: {
+        approvedVersionId: null, pendingVersionId: null, closedAt: at, closedById: user.id, closedReason: 'removed',
+        removedVersionId, removedAt: at, removedById: user.id, removedReason: input.reason, removedReasonInternal: input.internal,
+      },
+    })
+    if (!r.count) throw new ActionError(STALE)
+    // The listed version and one in review both go (the seen guard made sure they are the ones the reviewer saw).
+    await recordProjectActivity(tx, [input.approvedVersionId, input.pendingVersionId].filter((v): v is string => !!v).map((v) => (
+      { ...activity(now, user.id), versionId: v, event: 'removed' as const, reason: input.reason, reasonInternal: input.internal }
+    )))
   })
-  if (!r.count) throw new ActionError(STALE)
   await recordAudit({ actorId: user.id, action: 'tooling.remove', entityType: 'ToolingListing', entityId: input.listingId, before: { approvedVersionId: input.approvedVersionId, pendingVersionId: input.pendingVersionId }, after: { closedReason: 'removed', reason: input.reason, internal: input.internal, removedVersionId } })
   refresh()
   return null

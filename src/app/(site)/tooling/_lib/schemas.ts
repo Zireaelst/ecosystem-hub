@@ -7,7 +7,8 @@ export const submitListingSchema = z.object({
   projectId: id,
   consent: z.literal(true, { error: 'Agree to the public listing first' }),
 })
-export const withdrawListingSchema = z.object({ projectId: id })
+/** `submission`: take the version in review back; `listing`: unlist (see `withdrawPlan`). */
+export const withdrawListingSchema = z.object({ projectId: id, what: z.enum(['submission', 'listing']) })
 
 /** The page's view of the listing travels with every review, so a stale page or a second reviewer is refused, not applied. */
 const seen = { listingId: id, approvedVersionId: id.nullable(), pendingVersionId: id.nullable() }
