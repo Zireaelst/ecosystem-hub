@@ -9,8 +9,6 @@ import { Button } from '@/components/ui/button'
 import { CASCADE_URL, getCascadeStats } from '@/lib/cascade'
 import { isFlagOn } from '@/lib/flag-store'
 import { canonical } from '@/lib/metadata'
-// Static import: the URL carries a content hash, so a replaced logo is never served from a cache.
-import cascadeLogo from '../../../../public/logos/cascade.png'
 
 export const metadata: Metadata = {
   title: 'Built on Avalanche',
@@ -32,7 +30,7 @@ export default async function EcosystemPage() {
       </SectionHeading>
 
       <section aria-labelledby="cascade" className="flex flex-col gap-5 rounded-xl border border-line bg-surface-2 p-6 sm:flex-row sm:items-center sm:gap-6">
-        <Image src={cascadeLogo} alt="" width={72} height={72} className="size-18 shrink-0 rounded-xl" />
+        <Image src="/logos/cascade.png" alt="" width={72} height={72} className="size-18 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1">
           <h2 id="cascade" className="text-2xl">Cascade</h2>
           <p className="mt-1 text-fg-muted">The map of the Avalanche ecosystem: every live project building on Avalanche, with its links and more.</p>
