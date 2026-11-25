@@ -121,7 +121,7 @@ prisma/schema/<area>.prisma            the area's models (multi-file schema)
 ## Integrations
 - **The member portal is read-only for the hub.** The hub only reads from it (GETs, plus lookup POSTs that carry a hash in the body) and never creates, changes or deletes data there. The portal owns members, chapters and events; the hub keeps read-only copies (`PortalProfile`, portal-sourced `Event`s). Never request a portal API key scope that allows writes.
 - **Member portal** (`members.team1.network`): `POST /api/v1/members/check` (scope `members:check`, body `{ emailHash }`) answers "is this a team1 member" - the intended way to give members extra features. Later also SSO via `genericOAuth`.
-- **Cascade** and others call this hub's `/api/v1` with keys from `/admin/api-keys`.
+- **Cascade** and others call this hub's `/api/v1` with keys from `/admin/api-keys`. The hub reads Cascade's public `GET /api/v1/stats` (`{ projects, categories }`, no key, live projects only) for the numbers on `/ecosystem` (`src/lib/cascade.ts`, cached 1 h, no numbers on failure) - read-only, like the member portal.
 - **Monitoring env (all optional, no-op when unset):** `LOG_HASH_SECRET`, `HEARTBEAT_URL` (worker heartbeat ping), `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_URL`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` (source maps, build arg on the web service only). See `.env.example`.
 - **Luma**: public data only (see Events). Don't add Luma API keys or luma-sync dependencies.
 
