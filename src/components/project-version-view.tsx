@@ -1,6 +1,7 @@
 import { Code2, Globe, PlayCircle } from 'lucide-react'
 import type { ProjectVersion } from '@prisma/client'
 import { CopyButton } from '@/components/copy-button'
+import { LightboxImage } from '@/components/image-lightbox'
 import { Markdown } from '@/components/markdown'
 import { SocialIcon, socialPlatform } from '@/components/social-icon'
 import { Badge } from '@/components/ui/badge'
@@ -39,12 +40,10 @@ export function ProjectVersionView({ version: v, hideCountry = false, titleAs: T
   const addresses = (v.deployedAddresses as { tag: string; address: string; network?: string }[]) ?? []
   const maturity = PROJECT_MATURITY[v.maturity as ProjectMaturity] as (typeof PROJECT_MATURITY)[ProjectMaturity] | undefined
   const categories = v.categories.map((c) => (c === 'Other (Specify)' ? v.otherCategory : c)).filter(Boolean)
+  const images = [...(v.coverUrl ? [v.coverUrl] : []), ...v.screenshots]
   return (
     <article className="space-y-8">
-      {v.coverUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- own CDN upload
-        <img src={v.coverUrl} alt="" className="aspect-video w-full rounded-xl border border-line object-cover" />
-      )}
+      {v.coverUrl && <LightboxImage images={images} index={0} label="Open cover image" className="aspect-video w-full rounded-xl border border-line object-cover" />}
       <header className="flex items-start gap-5">
         {v.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- own CDN upload
@@ -100,10 +99,7 @@ export function ProjectVersionView({ version: v, hideCountry = false, titleAs: T
           <ul className="grid gap-3 sm:grid-cols-2">
             {v.screenshots.map((u, i) => (
               <li key={u}>
-                <a href={u} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- own CDN upload */}
-                  <img src={u} alt={`Screenshot ${i + 1}`} loading="lazy" className="aspect-video w-full rounded-lg border border-line object-cover transition-opacity hover:opacity-90" />
-                </a>
+                <LightboxImage images={images} index={images.length - v.screenshots.length + i} label={`Open screenshot ${i + 1}`} className="aspect-video w-full rounded-lg border border-line object-cover transition-opacity hover:opacity-90" />
               </li>
             ))}
           </ul>
