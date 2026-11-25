@@ -11,7 +11,7 @@ type Props = { params: Promise<{ slug: string }> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const tool = await getPublicTool((await params).slug)
   if (!tool) return {}
-  return { title: `${tool.version.name} · Tooling`, description: tool.version.shortDescription, ...canonical(toolHref(tool)) }
+  return { title: `${tool.version.name} · Community Tools`, description: tool.version.shortDescription, ...canonical(toolHref(tool)) }
 }
 
 const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -22,7 +22,7 @@ export default async function ToolPage({ params }: Props) {
   if (!tool) notFound()
   return (
     <div className="container-page max-w-4xl py-10 sm:py-16">
-      <BackLink href="/tooling">Tooling</BackLink>
+      <BackLink href="/tooling">Community Tools</BackLink>
       <div className="mt-6">
         <ProjectVersionView version={tool.version} hideCountry titleAs="h1" />
       </div>

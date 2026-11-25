@@ -1,16 +1,22 @@
 import Link from 'next/link'
-import { getCurrentUser } from '@/lib/session'
+import { getCurrentUser, type CurrentUser } from '@/lib/session'
 import { getHackathonRoles } from '@/app/(site)/events/_lib/hackathons/queries'
 import { can, holdsAny } from '@/lib/permissions'
 import { Button } from '@/components/ui/button'
 import { Logo } from './logo'
 import { ThemeToggle } from './theme-toggle'
 import { MobileNav } from './mobile-nav'
-import { UserMenu } from './user-menu'
+import { UserMenu, type UserMenuUser } from './user-menu'
+
+/** What the account menu shows for `user`. */
+async function userMenuUser(user: CurrentUser): Promise<UserMenuUser> {
+  const roles = await getHackathonRoles(user.id)
+  return { name: user.name, email: user.email, image: user.image, showAdmin: holdsAny(user), showJudging: !!roles.judge, showManage: !!roles.organizer || can(user, 'hackathons.manage') }
+}
 
 export async function SiteHeader() {
   const user = await getCurrentUser()
-  const roles = user ? await getHackathonRoles(user.id) : null
+  const menu = user ? await userMenuUser(user) : null
   return (
     <header className="sticky top-0 z-50 h-16 border-b border-line bg-surface-0/80 backdrop-blur-md">
       <div className="container-page flex h-full items-center justify-between gap-4 md:grid md:grid-cols-[1fr_auto_1fr]">
@@ -18,7 +24,7 @@ export async function SiteHeader() {
         <nav aria-label="Main" className="hidden items-center gap-6 text-sm md:flex">
           <Link href="/events" className="text-fg-muted transition-colors hover:text-fg-heading">Events</Link>
           <Link href="/education" className="text-fg-muted transition-colors hover:text-fg-heading">Education</Link>
-          <Link href="/tooling" className="text-fg-muted transition-colors hover:text-fg-heading">Tooling</Link>
+          <Link href="/ecosystem" className="text-fg-muted transition-colors hover:text-fg-heading">Ecosystem</Link>
           {/* ponytail: external until grants live in the hub */}
           <a href="https://build.avax.network/grants" target="_blank" rel="noopener noreferrer" className="text-fg-muted transition-colors hover:text-fg-heading">Grants</a>
           {user && (
@@ -32,8 +38,8 @@ export async function SiteHeader() {
         <div className="flex items-center gap-1 justify-self-end sm:gap-2">
           <MobileNav signedIn={!!user} />
           <ThemeToggle />
-          {user ? (
-            <UserMenu user={{ name: user.name, email: user.email, image: user.image, showAdmin: holdsAny(user), showJudging: !!roles?.judge, showManage: !!roles?.organizer || can(user, 'hackathons.manage') }} />
+          {menu ? (
+            <UserMenu user={menu} />
           ) : (
             <>
               <Link href="/sign-in" className="hidden h-10 items-center px-2 text-sm text-fg-muted transition-colors hover:text-fg-heading sm:flex">Sign in</Link>

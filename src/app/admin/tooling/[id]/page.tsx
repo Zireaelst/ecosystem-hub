@@ -48,7 +48,12 @@ export default async function ToolingReviewPage({ params }: { params: Promise<{ 
                 {l.rejectReason && <span className="text-fg-muted">({l.rejectReasonInternal ? 'internal' : 'shared with the team'})</span>}
               </li>
             )}
-            {l.removedAt && <li>Removed by {l.names.removed} on {day(l.removedAt)}{l.numbers.removed ? ` (versions up to ${l.numbers.removed})` : ''}: “{l.removedReason}”</li>}
+            {l.removedAt && (
+              <li>
+                Removed by {l.names.removed} on {day(l.removedAt)}{l.numbers.removed ? ` (versions up to ${l.numbers.removed})` : ''}{l.removedReason ? <>: “{l.removedReason}”</> : '.'}{' '}
+                {l.removedReason && <span className="text-fg-muted">({l.removedReasonInternal ? 'internal' : 'shared with the team'})</span>}
+              </li>
+            )}
             {l.closedAt && l.closedReason === 'withdrawn' && <li>Withdrawn by {l.names.closed} on {day(l.closedAt)}.</li>}
           </ul>
           {!removeProblem(l) && <div className="mt-4"><RemoveButton seen={seen} /></div>}

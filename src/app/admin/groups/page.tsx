@@ -3,10 +3,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { canSeeGroupsAdmin } from '@/app/(app)/referrals/_lib/nav'
+import { DataTable } from '@/components/data-table'
 import { PageHeader } from '@/components/layout/page-header'
 import { StatusPill } from '@/components/status-pill'
 import { Button } from '@/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { prisma } from '@/lib/db'
 import { requireUser } from '@/lib/guards'
 import { portalKeyConfigured, syncChapterGroups } from '@/lib/member-portal'
@@ -36,31 +36,29 @@ export default async function AdminGroupsPage() {
       </PageHeader>
       {syncError && <p className={notice}>Couldn&apos;t load chapters from the member portal: {syncError}</p>}
       {!portalKeyConfigured() && <p className={notice}>MEMBER_PORTAL_API_KEY is not set - chapter groups get no members and new referrals are snapshotted without them.</p>}
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Group</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Members</TableHead>
-              <TableHead className="text-right">Onboardings</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {groups.map((g) => (
-              <TableRow key={g.id}>
-                <TableCell><Link href={`/admin/groups/${g.id}`} className="text-fg-heading hover:underline">{g.name}</Link></TableCell>
-                <TableCell>{g.portalChapterSlug ? <StatusPill tone="info">Chapter</StatusPill> : <StatusPill>Manual</StatusPill>}</TableCell>
-                <TableCell className="text-right tabular-nums">{g.portalChapterSlug ? (counts.get(g.portalChapterSlug) ?? 0) : g._count.members}</TableCell>
-                <TableCell className="text-right tabular-nums">{g._count.referrals}</TableCell>
-              </TableRow>
-            ))}
-            {groups.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="py-12 text-center text-fg-muted">No groups yet.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        id="admin-groups"
+        empty="No groups yet."
+        columns={[
+          { key: 'name', label: 'Group', sortable: true, hideable: false },
+          { key: 'type', label: 'Type', sortable: true },
+          { key: 'members', label: 'Members', sortable: true, firstDir: 'desc', className: 'text-right tabular-nums' },
+          { key: 'onboardings', label: 'Onboardings', sortable: true, firstDir: 'desc', className: 'text-right tabular-nums' },
+        ]}
+        rows={groups.map((g) => {
+          const members = g.portalChapterSlug ? (counts.get(g.portalChapterSlug) ?? 0) : g._count.members
+          return {
+            id: g.id,
+            sort: { name: g.name, type: g.portalChapterSlug ? 'chapter' : 'manual', members, onboardings: g._count.referrals },
+            cells: {
+              name: <Link href={`/admin/groups/${g.id}`} className="text-fg-heading hover:underline">{g.name}</Link>,
+              type: g.portalChapterSlug ? <StatusPill tone="info">Chapter</StatusPill> : <StatusPill>Manual</StatusPill>,
+              members,
+              onboardings: g._count.referrals,
+            },
+          }
+        })}
+      />
     </>
   )
 }

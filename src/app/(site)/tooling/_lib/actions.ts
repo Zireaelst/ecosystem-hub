@@ -5,6 +5,7 @@ import { canEditProject } from '@/app/(app)/projects/_lib/rules'
 import { action, ActionError, ForbiddenError } from '@/lib/action'
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/db'
+import { requireFlag } from '@/lib/flag-store'
 import { approveProblem, isRejectRetry, listingProblems, removalBoundary, removeProblem, SEAL_NOTE, submitBlock, TOOLING_CONSENT } from './rules'
 import { approveListingSchema, rejectListingSchema, removeListingSchema, submitListingSchema, withdrawListingSchema } from './schemas'
 
@@ -25,6 +26,7 @@ async function requireTeam(projectId: string, userId: string) {
 
 /** Seal the project's current version (or reuse it if already sealed), check it, and put it up for review with the team's consent. */
 export const submitToTooling = action({ schema: submitListingSchema, permission: 'user' }, async ({ projectId }, user) => {
+  await requireFlag('tooling')
   await requireTeam(projectId, user.id)
   const out = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({ where: { id: projectId }, select: { archivedAt: true, currentVersionId: true } })
@@ -64,6 +66,7 @@ export const submitToTooling = action({ schema: submitListingSchema, permission:
 
 /** The team takes the project off the list (and out of review) without a reviewer. */
 export const withdrawFromTooling = action({ schema: withdrawListingSchema, permission: 'user' }, async ({ projectId }, user) => {
+  await requireFlag('tooling')
   await requireTeam(projectId, user.id)
   const listing = await prisma.toolingListing.findUnique({ where: { projectId } })
   if (!listing || listing.closedAt) throw new ActionError('Nothing to withdraw')
@@ -126,7 +129,7 @@ export const rejectListing = action({ schema: rejectListingSchema, permission: '
 })
 
 /**
- * Take a listed project off the list and out of review (a rug, an archived project). The team sees the reason and can
+ * Take a listed project off the list and out of review (a rug, an archived project). The team sees the reason (unless internal) and can
  * submit a changed version again; the removal stays on the listing for the next reviewer.
  */
 export const removeListing = action({ schema: removeListingSchema, permission: 'tooling.review' }, async (input, user) => {
@@ -151,11 +154,11 @@ export const removeListing = action({ schema: removeListingSchema, permission: '
     where: seenWhere(input),
     data: {
       approvedVersionId: null, pendingVersionId: null, closedAt: at, closedById: user.id, closedReason: 'removed',
-      removedVersionId, removedAt: at, removedById: user.id, removedReason: input.reason,
+      removedVersionId, removedAt: at, removedById: user.id, removedReason: input.reason, removedReasonInternal: input.internal,
     },
   })
   if (!r.count) throw new ActionError(STALE)
-  await recordAudit({ actorId: user.id, action: 'tooling.remove', entityType: 'ToolingListing', entityId: input.listingId, before: { approvedVersionId: input.approvedVersionId, pendingVersionId: input.pendingVersionId }, after: { closedReason: 'removed', reason: input.reason, removedVersionId } })
+  await recordAudit({ actorId: user.id, action: 'tooling.remove', entityType: 'ToolingListing', entityId: input.listingId, before: { approvedVersionId: input.approvedVersionId, pendingVersionId: input.pendingVersionId }, after: { closedReason: 'removed', reason: input.reason, internal: input.internal, removedVersionId } })
   refresh()
   return null
 })

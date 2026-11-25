@@ -2,14 +2,18 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionCookie } from 'better-auth/cookies'
 import { rateLimit } from '@/lib/rate-limit'
 import { getRequestIp } from '@/lib/request-ip'
+import { isFlagOn } from '@/lib/flag-store'
+import { flagForPath } from '@/lib/flags'
 import { REF_COOKIE, REF_COOKIE_MAX_AGE, shouldSetRefCookie } from '@/app/(app)/referrals/_lib/rules'
 
-// Next 16's renamed middleware. Three jobs:
+// Next 16's renamed middleware. Four jobs:
 //  1. per-request CSP nonce (script-src without 'unsafe-inline'),
 //  2. a coarse AUTHENTICATION wall for /dashboard and /admin (cookie presence
 //     only). It is NOT authorization - guards in src/lib/guards.ts and
 //     action() are authoritative,
-//  3. remember ?ref= for sign-up attribution (a cookie, no DB).
+//  3. remember ?ref= for sign-up attribution (a cookie, no DB),
+//  4. feature flags: a URL under a switched-off flag's `paths` (src/lib/flags.ts) answers 404, for everyone.
+//     Here and not in a layout: a layout check doesn't stop its pages from rendering. Cached, so no query per request.
 
 const PROTECTED = ['/dashboard', '/admin', '/manage', '/projects', '/judge', '/profile', '/referrals', '/groups']
 
@@ -53,7 +57,7 @@ function buildCsp(nonce: string): string {
 // never logged) in front of the global one, so a single client can't use up the global cap for everyone.
 const TUNNEL_PATHS = ['/monitoring', '/sentry-tunnel']
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl
   // Next rewrites match case-insensitively (/Monitoring reaches the tunnel too), so compare lowercased.
   if (TUNNEL_PATHS.includes(pathname.toLowerCase())) {
@@ -76,7 +80,11 @@ export function proxy(request: NextRequest) {
   requestHeaders.set('x-nonce', nonce)
   requestHeaders.set('x-pathname', pathname + search)
   requestHeaders.set('Content-Security-Policy', csp)
-  const res = NextResponse.next({ request: { headers: requestHeaders } })
+  const flag = flagForPath(pathname)
+  // A path no route matches: Next renders the not-found page with a 404 status.
+  const res = flag && !(await isFlagOn(flag))
+    ? NextResponse.rewrite(new URL('/_feature-off', request.url), { request: { headers: requestHeaders } })
+    : NextResponse.next({ request: { headers: requestHeaders } })
   res.headers.set('Content-Security-Policy', csp)
   return withRefCookie(request, res)
 }

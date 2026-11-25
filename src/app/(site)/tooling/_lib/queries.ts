@@ -52,7 +52,7 @@ export async function listMyToolingProjects(userId: string) {
       toolingListing: {
         select: {
           approvedVersionId: true, pendingVersionId: true, rejectedVersionId: true, rejectedAt: true, rejectReason: true, rejectReasonInternal: true,
-          approvedAt: true, closedAt: true, closedReason: true, removedVersionId: true, removedReason: true, approvedVersion: ref, pendingVersion: ref,
+          approvedAt: true, closedAt: true, closedReason: true, removedVersionId: true, removedReason: true, removedReasonInternal: true, approvedVersion: ref, pendingVersion: ref,
         },
       },
     },
@@ -69,11 +69,22 @@ const reviewFilterWhere: Record<ReviewFilter, object> = {
   closed: { OR: [{ closedAt: { not: null } }, { project: { archivedAt: { not: null } } }] },
 }
 
+/** How many listings match `filter` (admin overview). */
+export const countListings = (filter: ReviewFilter) => prisma.toolingListing.count({ where: reviewFilterWhere[filter] })
+
 /** One page of the review queue (search on the project's current name), with each project's newest sealed version (a reviewer can approve a newer one directly). */
-export async function listListingsForReview({ q, filter, page }: { q?: string; filter: ReviewFilter; page: number }) {
+export const REVIEW_SORTS = ['name', 'submitted', 'approved', 'updated'] as const
+export type ReviewSort = { key: (typeof REVIEW_SORTS)[number]; dir: 'asc' | 'desc' }
+const reviewOrder = ({ key, dir }: ReviewSort) =>
+  key === 'name' ? { project: { currentVersion: { name: dir } } }
+  : key === 'submitted' ? { submittedAt: { sort: dir, nulls: 'last' as const } }
+  : key === 'approved' ? { approvedAt: { sort: dir, nulls: 'last' as const } }
+  : { updatedAt: dir }
+
+export async function listListingsForReview({ q, filter, page, sort }: { q?: string; filter: ReviewFilter; page: number; sort: ReviewSort }) {
   const rows = await prisma.toolingListing.findMany({
     where: { AND: [reviewFilterWhere[filter], q ? { project: { currentVersion: { name: { contains: q, mode: 'insensitive' } } } } : {}] },
-    orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    orderBy: [reviewOrder(sort), { id: 'asc' }],
     skip: (page - 1) * REVIEW_PAGE_SIZE,
     take: REVIEW_PAGE_SIZE + 1,
     include: {

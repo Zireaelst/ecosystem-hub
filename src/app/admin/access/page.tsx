@@ -16,13 +16,15 @@ import { DeleteRoleButton, RoleDialog } from './_components/role-dialog'
 
 export const metadata: Metadata = { title: 'Access' }
 
+const PERSON = { id: true, name: true, email: true, isSuperAdmin: true, roles: { select: { role: { select: { label: true } } } }, _count: { select: { permissions: true } } } as const
+
 export default async function AccessPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
   await requireSuperAdmin()
   const q = textParam((await searchParams).q)
   const [roles, users] = await Promise.all([
     prisma.role.findMany({ orderBy: { label: 'asc' }, include: { _count: { select: { users: true } } } }),
     q
-      ? prisma.user.findMany({ where: userSearchWhere(q), take: 20, orderBy: { name: 'asc' }, select: { id: true, name: true, email: true, isSuperAdmin: true } })
+      ? prisma.user.findMany({ where: userSearchWhere(q), take: 20, orderBy: { name: 'asc' }, select: PERSON })
       : prisma.user.findMany({
           where: {
             OR: [
@@ -34,9 +36,10 @@ export default async function AccessPage({ searchParams }: { searchParams: Promi
           },
           take: 50,
           orderBy: { name: 'asc' },
-          select: { id: true, name: true, email: true, isSuperAdmin: true },
+          select: PERSON,
         }),
   ])
+  const envAdmins = new Set(envSuperAdminEmails().map((e) => e.toLowerCase()))
 
   return (
     <>
@@ -45,6 +48,40 @@ export default async function AccessPage({ searchParams }: { searchParams: Promi
       </PageHeader>
 
       <section className="mb-12">
+        <h2 className="mb-1 text-lg">People</h2>
+        <p className="mb-4 text-sm text-fg-muted">{q ? 'Search results.' : 'Everyone with any access. Search to find others.'}</p>
+        <SearchForm q={q} placeholder="Search name or email" />
+        <DataTable
+          id="admin-access-people"
+          empty="No one found."
+          columns={[
+            { key: 'name', label: 'Name', sortable: true, hideable: false },
+            { key: 'email', label: 'Email', sortable: true },
+            { key: 'access', label: 'Access' },
+            { key: 'direct', label: 'Direct permissions', sortable: true, firstDir: 'desc' },
+          ]}
+          rows={users.map((u) => {
+            const superAdmin = u.isSuperAdmin || envAdmins.has(u.email.toLowerCase())
+            return {
+              id: u.id,
+              sort: { name: u.name, email: u.email, direct: u._count.permissions },
+              cells: {
+                name: <Link href={`/admin/access/users/${u.id}`} className="text-fg-heading underline-offset-4 hover:underline">{u.name}</Link>,
+                email: u.email,
+                access: (
+                  <span className="space-x-1">
+                    {superAdmin && <Badge>Super admin{u.isSuperAdmin ? '' : ' (env)'}</Badge>}
+                    {u.roles.map((r) => <Badge key={r.role.label} variant="secondary">{r.role.label}</Badge>)}
+                  </span>
+                ),
+                direct: u._count.permissions || '',
+              },
+            }
+          })}
+        />
+      </section>
+
+      <section>
         <h2 className="mb-3 text-lg">Roles</h2>
         <DataTable
           id="admin-roles"
@@ -84,25 +121,6 @@ export default async function AccessPage({ searchParams }: { searchParams: Promi
         />
       </section>
 
-      <section>
-        <h2 className="mb-1 text-lg">People</h2>
-        <p className="mb-4 text-sm text-fg-muted">{q ? 'Search results.' : 'Everyone with any access. Search to find others.'}</p>
-        <SearchForm q={q} placeholder="Search name or email" />
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface-2">
-          {users.map((u) => (
-            <li key={u.id}>
-              <Link href={`/admin/access/users/${u.id}`} className="flex min-h-14 items-center justify-between gap-4 px-4 py-3 hover:bg-surface-hover">
-                <span className="min-w-0">
-                  <span className="block truncate text-fg-heading">{u.name}</span>
-                  <span className="block truncate text-sm text-fg-muted">{u.email}</span>
-                </span>
-                {u.isSuperAdmin && <Badge>Super admin</Badge>}
-              </Link>
-            </li>
-          ))}
-          {users.length === 0 && <li className="px-4 py-8 text-center text-fg-muted">No one found.</li>}
-        </ul>
-      </section>
     </>
   )
 }
