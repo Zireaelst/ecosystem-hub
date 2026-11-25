@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { wasReplaced } from '@/app/(app)/projects/_lib/rules'
 import {
   approveProblem, closedState, currentRejection, isRejectRetry, listingProblems, newerVersion, removalBoundary, removeProblem, SEAL_NOTE, submitBlock, TOOLING_CATEGORY, TOOLING_CONSENT,
-  toolSearchWhere, visibleRejectReason, type ListingState,
+  toolSearchWhere, visibleRejectReason, withdrawPlan, type ListingState,
 } from '@/app/(site)/tooling/_lib/rules'
 
 const version = (extra: Partial<Parameters<typeof listingProblems>[0] & { id: string; number: number; sealedAt: Date | null }> = {}) => ({
@@ -63,6 +63,16 @@ test('submitBlock: listed, waiting, rejected or removed versions need an edit fi
   assert.match(submitBlock(l({ removedVersionId: 'v1', closedAt: new Date() }), 'v1')!, /took this project off \/tooling at this version/)
   assert.match(submitBlock(l({ removedVersionId: 'v1' }), 'v1')!, /took this project off \/tooling at this version/)
   assert.equal(submitBlock(l({ removedVersionId: 'v1', closedAt: new Date() }), 'v2'), null) // edited: a new version
+})
+
+test('withdrawPlan: a submission goes alone while a version is listed; unlist closes the listing', () => {
+  const open = { closedAt: null, approvedVersionId: 'v4', pendingVersionId: 'v5' }
+  assert.equal(withdrawPlan(open, 'submission'), 'pending')
+  assert.equal(withdrawPlan(open, 'listing'), 'close')
+  assert.equal(withdrawPlan({ ...open, approvedVersionId: null }, 'submission'), 'close')
+  assert.equal(withdrawPlan({ ...open, approvedVersionId: null }, 'listing'), null)
+  assert.equal(withdrawPlan({ ...open, pendingVersionId: null }, 'submission'), null)
+  assert.equal(withdrawPlan({ ...open, closedAt: new Date() }, 'listing'), null)
 })
 
 test('removeProblem: only a listed version is removed; a submission never listed is rejected', () => {

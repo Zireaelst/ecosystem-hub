@@ -18,6 +18,7 @@ model Project {
   submissions Submission[]
   milestones  ProjectMilestone[]
   toolingListing ToolingListing?
+  activities  ProjectActivity[]
 
   @@map("projects")
 }
@@ -71,6 +72,7 @@ model ProjectVersion {
   stageEntries StageEntry[]
   toolingApproved ToolingListing[] @relation("ToolingApproved")
   toolingPending  ToolingListing[] @relation("ToolingPending")
+  activities      ProjectActivity[]
 
   @@unique([projectId, number])
   @@map("project_versions")
@@ -131,4 +133,34 @@ model ProjectMilestone {
 
   @@index([projectId])
   @@map("project_milestones")
+}
+
+/// What happened to a project in a program (hackathons, Developer Tooling, later grants), for the team's version
+/// history and the reviewers. APPEND-ONLY: never update or delete rows. Written in the same transaction as the change it
+/// records (`recordProjectActivity`, src/lib/project-activity.ts); what is live or submitted stays in the program's tables.
+model ProjectActivity {
+  id             String          @id @default(cuid())
+  projectId      String
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// The version it concerns
+  versionId      String?
+  version        ProjectVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  /// PROJECT_PROGRAMS (only add): hackathon | tooling
+  program        String
+  /// The program's object, for the link: hackathon id, tooling listing id
+  targetId       String?
+  /// What it was called then, e.g. "ETH Denver · Final"
+  targetName     String?
+  /// PROJECT_ACTIVITY_EVENTS (only add)
+  event          String
+  reason         String?
+  /// true = only reviewers / organisers see the reason
+  reasonInternal Boolean         @default(false)
+  /// Who did it (no relation: keeps auth.prisma out of it); null = system
+  actorId        String?
+  createdAt      DateTime        @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([program, targetId])
+  @@map("project_activities")
 }

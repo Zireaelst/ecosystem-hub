@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { action, ActionError, ForbiddenError } from '@/lib/action'
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/db'
+import { hackathonTargetName, recordProjectActivity } from '@/lib/project-activity'
 import { buildAnswersSchema, stageState } from './rules'
 import { canSubmitToStage } from './submissions'
 import { canEditProject, missingForSubmission, planSeal, submissionNote, TEAM_ROLES } from '@/app/(app)/projects/_lib/rules'
@@ -84,11 +85,21 @@ export const submitToStage = action(
         create: { hackathonId, projectId, trackIds, createdById: user.id },
         update: idx === 0 ? { trackIds } : {}, // tracks are chosen in the first stage (or a team's first submission)
       })
-      return tx.stageEntry.upsert({
+      const before = await tx.stageEntry.findUnique({ where: { submissionId_stageId: { submissionId: sub.id, stageId } }, select: { projectVersionId: true } })
+      const saved = await tx.stageEntry.upsert({
         where: { submissionId_stageId: { submissionId: sub.id, stageId } },
         create: { submissionId: sub.id, stageId, projectVersionId: current.id, answers: parsed.data as object, teamSnapshot, preexistingIdea, builtDuringEvent },
         update: { projectVersionId: current.id, answers: parsed.data as object, teamSnapshot, preexistingIdea, builtDuringEvent, submittedAt: new Date() },
       })
+      // A new version for this stage is an activity (and replaces the one before); updating answers on the same version isn't.
+      if (before?.projectVersionId !== current.id) {
+        const base = { projectId, program: 'hackathon' as const, targetId: hackathonId, targetName: hackathonTargetName(h.event.name, stage.name, h.stages.length), actorId: user.id }
+        await recordProjectActivity(tx, [
+          { ...base, versionId: current.id, event: 'submitted' },
+          ...(before ? [{ ...base, versionId: before.projectVersionId, event: 'replaced' as const }] : []),
+        ])
+      }
+      return saved
     })
     await recordAudit({ actorId: user.id, action: 'hackathon.entry.submit', entityType: 'StageEntry', entityId: entry.id, after: { stageId, projectVersionId: project.currentVersionId, trackIds } })
     revalidatePath(`/events/${h.event.slug}`, 'layout')
@@ -99,14 +110,28 @@ export const submitToStage = action(
 export const withdrawSubmission = action({ schema: z.object({ submissionId: z.string().min(1) }), permission: 'user' }, async ({ submissionId }, user) => {
   const s = await prisma.submission.findUnique({
     where: { id: submissionId },
-    include: { project: { include: { members: { select: { userId: true, role: true } } } }, hackathon: { include: { event: { select: { slug: true } }, stages: { orderBy: { order: 'asc' } } } } },
+    include: {
+      project: { include: { members: { select: { userId: true, role: true } } } },
+      hackathon: { include: { event: { select: { slug: true, name: true } }, stages: { orderBy: { order: 'asc' } } } },
+      entries: { orderBy: { stage: { order: 'desc' } }, take: 1, select: { projectVersionId: true, stage: { select: { name: true } } } },
+    },
   })
   if (!s || !s.project.members.some((m) => m.userId === user.id)) throw new ActionError('Submission not found')
   if (!s.project.members.some((m) => m.userId === user.id && canEditProject(m.role))) throw new ForbiddenError('Only writers and the owner can withdraw')
   if (s.status !== 'active') throw new ActionError('This submission is not active')
   const last = s.hackathon.stages.at(-1)
   if (last && stageState(last, new Date()) === 'closed') throw new ActionError('The hackathon is over - submissions can no longer be withdrawn')
-  await prisma.submission.update({ where: { id: s.id }, data: { status: 'withdrawn' } })
+  const latest = s.entries[0]
+  await prisma.$transaction(async (tx) => {
+    const r = await tx.submission.updateMany({ where: { id: s.id, status: 'active' }, data: { status: 'withdrawn' } })
+    if (!r.count) throw new ActionError('This submission is not active')
+    if (latest) {
+      await recordProjectActivity(tx, [{
+        projectId: s.projectId, versionId: latest.projectVersionId, program: 'hackathon', targetId: s.hackathonId,
+        targetName: hackathonTargetName(s.hackathon.event.name, latest.stage.name, s.hackathon.stages.length), event: 'withdrawn', actorId: user.id,
+      }])
+    }
+  })
   await recordAudit({ actorId: user.id, action: 'hackathon.submission.withdraw', entityType: 'Submission', entityId: s.id })
   revalidatePath(`/events/${s.hackathon.event.slug}`, 'layout')
   return null

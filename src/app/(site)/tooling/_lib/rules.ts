@@ -86,6 +86,17 @@ export function closedState(l: { closedAt: Date | null; closedReason: string | n
   return l.closedReason === 'removed' ? { by: 'reviewer', reason: l.removedReasonInternal ? null : l.removedReason } : { by: 'team', reason: null }
 }
 
+/**
+ * What the team's withdraw does, or null when there is nothing to withdraw. `submission`: only the version in review
+ * goes; a listed version stays listed (`pending`), with nothing listed the listing closes. `listing`: unlist, off the
+ * list and out of review (`close`).
+ */
+export function withdrawPlan(l: { closedAt: Date | null; approvedVersionId: string | null; pendingVersionId: string | null }, what: 'submission' | 'listing'): 'pending' | 'close' | null {
+  if (l.closedAt) return null
+  if (what === 'submission') return l.pendingVersionId ? (l.approvedVersionId ? 'pending' : 'close') : null
+  return l.approvedVersionId ? 'close' : null
+}
+
 /** Why a reviewer can't remove the listing, or null. Only a listed version is removed; a submission never listed is rejected. */
 export function removeProblem(l: { closedAt: Date | null; approvedVersionId: string | null }): string | null {
   if (l.closedAt) return 'The listing was withdrawn or removed'

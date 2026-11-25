@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { action, ActionError, ForbiddenError } from '@/lib/action'
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/db'
+import { hackathonTargetName, recordProjectActivity } from '@/lib/project-activity'
 import { brandedShell, button, CELL, esc, PARA } from '@/lib/email-template'
 import { sendMail } from '@/lib/mailer'
 import { assignRandom, entryTracks, isConflicted, judgeEligibility, weightedTotal, type Pair } from './judging'
@@ -174,7 +175,17 @@ export const setAdvanced = action({ schema: z.object({ hackathonId: id, stageId:
   // Only entries of THIS stage with an active submission; newly advanced ones only (no repeat mails).
   const scope = { id: { in: entryIds }, stageId, submission: { status: 'active' } }
   const toMail = advanced ? (await prisma.stageEntry.findMany({ where: { ...scope, advancedAt: null }, select: { id: true } })).map((e) => e.id) : []
-  const r = await prisma.stageEntry.updateMany({ where: advanced ? { ...scope, advancedAt: null } : scope, data: advanced ? { advancedAt: new Date(), advancedById: user.id } : { advancedAt: null, advancedById: null } })
+  // Only entries whose state changes get an activity row: newly advanced, or an advance taken back.
+  const changes = advanced ? { ...scope, advancedAt: null } : { ...scope, advancedAt: { not: null } }
+  const r = await prisma.$transaction(async (tx) => {
+    const changing = await tx.stageEntry.findMany({ where: changes, select: { projectVersionId: true, submission: { select: { projectId: true } } } })
+    const res = await tx.stageEntry.updateMany({ where: changes, data: advanced ? { advancedAt: new Date(), advancedById: user.id } : { advancedAt: null, advancedById: null } })
+    const targetName = hackathonTargetName(h.event.name, stage.name, stage.hackathon.stages.length)
+    await recordProjectActivity(tx, changing.map((e) => ({
+      projectId: e.submission.projectId, versionId: e.projectVersionId, program: 'hackathon' as const, targetId: hackathonId, targetName, event: advanced ? 'advanced' as const : 'unadvanced' as const, actorId: user.id,
+    })))
+    return res
+  })
   await recordAudit({ actorId: user.id, action: advanced ? 'hackathon.entry.advance' : 'hackathon.entry.unadvance', entityType: 'HackathonStage', entityId: stageId, after: { entryIds } })
   if (advanced) {
     const entries = await prisma.stageEntry.findMany({ where: { id: { in: toMail }, stageId }, include: { submission: { include: { project: { include: { members: { include: { user: { select: { email: true } } } }, currentVersion: { select: { name: true } } } } } } } })
@@ -196,8 +207,22 @@ export const setAdvanced = action({ schema: z.object({ hackathonId: id, stageId:
 
 export const setSubmissionStatus = action({ schema: z.object({ hackathonId: id, submissionId: id, status: z.enum(['active', 'disqualified']) }), permission: 'user' }, async ({ hackathonId, submissionId, status }, user) => {
   const h = await assertManage(hackathonId, user)
-  const r = await prisma.submission.updateMany({ where: { id: submissionId, hackathonId, status: { not: 'withdrawn' } }, data: { status } })
-  if (!r.count) throw new ActionError('Submission not found')
+  const sub = await prisma.submission.findFirst({
+    where: { id: submissionId, hackathonId },
+    select: { status: true, projectId: true, entries: { orderBy: { stage: { order: 'desc' } }, take: 1, select: { projectVersionId: true, stage: { select: { name: true } } } }, hackathon: { select: { _count: { select: { stages: true } } } } },
+  })
+  if (!sub || sub.status === 'withdrawn') throw new ActionError('Submission not found')
+  await prisma.$transaction(async (tx) => {
+    const r = await tx.submission.updateMany({ where: { id: submissionId, hackathonId, status: sub.status }, data: { status } })
+    if (!r.count) throw new ActionError('This submission changed - reload the page')
+    const latest = sub.entries[0]
+    if (sub.status !== status && latest) {
+      await recordProjectActivity(tx, [{
+        projectId: sub.projectId, versionId: latest.projectVersionId, program: 'hackathon', targetId: hackathonId,
+        targetName: hackathonTargetName(h.event.name, latest.stage.name, sub.hackathon._count.stages), event: status === 'disqualified' ? 'disqualified' : 'reinstated', actorId: user.id,
+      }])
+    }
+  })
   await recordAudit({ actorId: user.id, action: status === 'disqualified' ? 'hackathon.submission.disqualify' : 'hackathon.submission.reinstate', entityType: 'Submission', entityId: submissionId })
   revalidatePath(`/manage/hackathons/${hackathonId}`, 'layout')
   revalidatePath(`/events/${h.event.slug}`, 'layout')

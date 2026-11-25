@@ -2,6 +2,7 @@ import 'server-only'
 import { cache } from 'react'
 import { TEAM_ROLES } from '@/app/(app)/projects/_lib/rules'
 import { prisma } from '@/lib/db'
+import { activityLabel } from '@/lib/project-activity'
 import { CHECKED_FIELDS, newerVersion, PAGE_SIZE, toolSearchWhere, type PublicTool } from './rules'
 
 /** Listed = a reviewer approved a version, the listing is open and the project isn't deleted. */
@@ -93,28 +94,38 @@ export async function listListingsForReview({ q, filter, page, sort }: { q?: str
       pendingVersion: ref,
     },
   })
-  return { rows: rows.slice(0, REVIEW_PAGE_SIZE).map((r) => ({ ...r, newer: newerVersion(r, r.project.versions[0] ?? null) })), hasMore: rows.length > REVIEW_PAGE_SIZE }
+  const pageRows = rows.slice(0, REVIEW_PAGE_SIZE)
+  // Who submitted last: names only, no emails (reviewers only).
+  const ids = [...new Set(pageRows.flatMap((r) => (r.submittedById ? [r.submittedById] : [])))]
+  const users = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : []
+  const names = new Map(users.map((u) => [u.id, u.name]))
+  return {
+    rows: pageRows.map((r) => ({ ...r, newer: newerVersion(r, r.project.versions[0] ?? null), submittedBy: r.submittedById ? names.get(r.submittedById) ?? 'a deleted user' : null })),
+    hasMore: rows.length > REVIEW_PAGE_SIZE,
+  }
 }
 
-/** One listing with the full versions a reviewer looks at, the names behind it (no emails) and the numbers of the rejected / removed versions. */
+/** One listing with the full versions a reviewer looks at, the names behind it (no emails) and its history (the listing's rows of the project activity log). */
 export async function getListingForReview(id: string) {
   const r = await prisma.toolingListing.findUnique({
     where: { id },
     include: { project: { select: { slug: true, archivedAt: true, currentVersion: { select: { name: true } }, versions: latestSealed } }, approvedVersion: true, pendingVersion: true },
   })
   if (!r) return null
-  const userIds = [r.submittedById, r.consentById, r.approvedById, r.rejectedById, r.removedById, r.closedById].filter((x): x is string => !!x)
-  const versionIds = [r.rejectedVersionId, r.removedVersionId].filter((x): x is string => !!x)
-  const [users, versions] = await Promise.all([
-    prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
-    prisma.projectVersion.findMany({ where: { id: { in: versionIds }, projectId: r.projectId }, select: { id: true, number: true } }),
-  ])
+  // The listing's history: its rows of the project's activity log (src/lib/project-activity.ts), newest first.
+  const activity = await prisma.projectActivity.findMany({
+    where: { projectId: r.projectId, program: 'tooling', targetId: r.id },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+    select: { id: true, event: true, reason: true, reasonInternal: true, actorId: true, createdAt: true, version: { select: { number: true } } },
+  })
+  const userIds = [...new Set([r.submittedById, r.closedById, ...activity.map((a) => a.actorId)].filter((x): x is string => !!x))]
+  const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
   const name = (uid: string | null) => (uid ? users.find((u) => u.id === uid)?.name ?? 'a deleted user' : null)
-  const number = (vid: string | null) => (vid ? versions.find((v) => v.id === vid)?.number ?? null : null)
   return {
     ...r,
     newer: newerVersion(r, r.project.versions[0] ?? null),
-    names: { submitted: name(r.submittedById), consent: name(r.consentById), approved: name(r.approvedById), rejected: name(r.rejectedById), removed: name(r.removedById), closed: name(r.closedById) },
-    numbers: { rejected: number(r.rejectedVersionId), removed: number(r.removedVersionId) },
+    names: { submitted: name(r.submittedById), closed: name(r.closedById) },
+    history: activity.map((a) => ({ id: a.id, at: a.createdAt, event: activityLabel(a.event), number: a.version?.number ?? null, by: name(a.actorId) ?? '-', reason: a.reason, internal: a.reasonInternal })),
   }
 }

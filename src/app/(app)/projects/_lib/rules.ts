@@ -55,6 +55,19 @@ export const submissionNote = (target: string) => `${SUBMITTED_PREFIX}${target}`
 /** A version sealed by a submission that no stage entry points at any more was re-submitted with a later version. */
 export const wasReplaced = (v: { sealedAt: Date | null; note: string | null; entries: number }) => !!v.sealedAt && v.entries === 0 && !!v.note?.startsWith(SUBMITTED_PREFIX)
 
+/**
+ * Where a row of the version history (`ProjectActivity`) links: a hackathon opens its event page; Developer Tooling the
+ * public tool page while this version is listed, otherwise the submit page. A new program (grants) adds its link here.
+ */
+export function activityHref(a: { program: string; targetId: string | null; versionId: string | null }, c: { projectSlug: string; listedToolingVersionId: string | null; hackathonSlugs: ReadonlyMap<string, string> }): string | null {
+  if (a.program === 'hackathon') {
+    const slug = a.targetId ? c.hackathonSlugs.get(a.targetId) : undefined
+    return slug ? `/events/${slug}` : null
+  }
+  if (a.program === 'tooling') return a.versionId && a.versionId === c.listedToolingVersionId ? `/tooling/${c.projectSlug}` : '/tooling/submit'
+  return null
+}
+
 export function versionLabel(v: { number: number; sealedAt: Date | null }): string {
   return v.sealedAt ? `Version ${v.number}` : `Version ${v.number} · draft`
 }
