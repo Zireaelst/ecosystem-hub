@@ -33,7 +33,8 @@ async function cropToBlob(src: string, area: Area, aspect: number, maxDimension:
   ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, w, h)
   let blob: Blob | null = null
   for (const q of [0.9, 0.8, 0.7, 0.6]) {
-    blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', q))
+    // WebP keeps transparency (JPEG turns it black). A browser that can't encode WebP returns PNG.
+    blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', q))
     if (blob && blob.size <= maxBytes) return blob
   }
   if (blob) return blob
@@ -92,7 +93,7 @@ function CropArea({ src, aspect, shape, maxDimension, maxBytes, onClose, onCropp
             setBusy(true)
             try {
               const blob = await cropToBlob(src, area, aspect, maxDimension, maxBytes)
-              if (await onCropped(new File([blob], 'image.jpg', { type: 'image/jpeg' }))) onClose()
+              if (await onCropped(new File([blob], `image.${blob.type.split('/')[1]}`, { type: blob.type }))) onClose()
             } catch (err) {
               // Thrown (not returned) errors: unreadable file, network, stale deploy.
               console.error('[image-crop] failed', err)
