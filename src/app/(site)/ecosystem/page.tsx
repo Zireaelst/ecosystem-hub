@@ -3,7 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import { ToolCard } from '../tooling/_components/tool-card'
-import { listPublicTools } from '../tooling/_lib/queries'
+import { listPublicToolPreview } from '../tooling/_lib/queries'
 import { SectionHeading } from '@/components/section-heading'
 import { Button } from '@/components/ui/button'
 import { CASCADE_URL, getCascadeStats } from '@/lib/cascade'
@@ -22,7 +22,7 @@ const num = new Intl.NumberFormat('en-US')
 /** Entry page to what's built on Avalanche. Cascade is always shown; the Community Tools part follows the `tooling` flag. */
 export default async function EcosystemPage() {
   const toolsOn = await isFlagOn('tooling')
-  const [cascade, tools] = await Promise.all([getCascadeStats(), toolsOn ? listPublicTools({ page: 1 }).then((r) => r.tools.slice(0, PREVIEW)) : []])
+  const [cascade, tools] = await Promise.all([getCascadeStats(), toolsOn ? listPublicToolPreview(PREVIEW) : []])
   return (
     <div className="container-page py-14 sm:py-20">
       <SectionHeading as="h1" title={<>Built on Avalanche<span className="text-brand">.</span></>}>

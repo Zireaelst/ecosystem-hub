@@ -10,18 +10,28 @@ const listed = { approvedVersionId: { not: null }, closedAt: null, project: { ar
 const ref = { select: { id: true, number: true } } as const
 const latestSealed = { where: { sealedAt: { not: null } }, orderBy: { number: 'desc' }, take: 1 } as const
 
-/** One page of listed tools for `/tooling`, newest approval first, searched in the database. Project data from the approved version only, never the team. */
-export async function listPublicTools({ q, page }: { q?: string; page: number }): Promise<{ tools: PublicTool[]; hasMore: boolean }> {
+/** Read public cards from the approved version only, newest approval first. */
+async function readToolCards(take: number, skip = 0, q?: string): Promise<PublicTool[]> {
   const search = toolSearchWhere(q)
   const rows = await prisma.toolingListing.findMany({
     where: { ...listed, ...(search ? { approvedVersion: search } : {}) },
     orderBy: [{ approvedAt: 'desc' }, { id: 'asc' }],
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE + 1,
+    skip,
+    take,
     select: { project: { select: { slug: true } }, approvedVersion: { select: { name: true, shortDescription: true, logoUrl: true } } },
   })
-  const tools = rows.flatMap((r) => (r.approvedVersion ? [{ slug: r.project.slug, ...r.approvedVersion }] : []))
-  return { tools: tools.slice(0, PAGE_SIZE), hasMore: rows.length > PAGE_SIZE }
+  return rows.flatMap((r) => (r.approvedVersion ? [{ slug: r.project.slug, ...r.approvedVersion }] : []))
+}
+
+export function listPublicToolPreview(limit: number) {
+  return readToolCards(limit)
+}
+
+export async function listPublicTools({ q, page }: { q?: string; page: number }): Promise<{ tools: PublicTool[]; hasMore: boolean }> {
+  const tools = await readToolCards(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE, q)
+  const hasMore = tools.length > PAGE_SIZE
+  if (hasMore) tools.pop()
+  return { tools, hasMore }
 }
 
 /** Whether anything is listed at all (the empty state: "nothing listed yet" vs "no match"). */
