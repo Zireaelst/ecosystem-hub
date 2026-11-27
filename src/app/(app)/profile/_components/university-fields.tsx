@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { CATALOG_VALUE, catalogSearchWords, emptyUniversityEntry, FIELDS_OF_STUDY, graduationYearRange, MAX_UNIVERSITIES, needsAdultConfirmation, TRACK_INTERESTS, UNIVERSITY_KINDS, type universityGaps, type UniversityEntry, type UniversityHit, type UniversityKind } from '@/lib/campus'
+import { CATALOG_VALUE, catalogSearchWords, emptyUniversityEntry, FIELDS_OF_STUDY, graduationYearRange, MAX_UNIVERSITIES, needsAdultConfirmation, TRACK_INTERESTS, UNIVERSITY_KINDS, updateUniversityEntry, type universityGaps, type UniversityEntry, type UniversityHit, type UniversityKind } from '@/lib/campus'
 import { flagEmoji } from '@/lib/countries'
 import { searchUniversities } from '@/lib/organization-actions'
 import type { OrgOptions } from '@/lib/organizations'
@@ -37,7 +37,7 @@ export function UniversityFields({ p, set, orgs, legacyInstitution, countries, d
   children?: React.ReactNode
 }) {
   const entries = p.universities
-  const update = (i: number, patch: Partial<UniversityEntry>) => set('universities', entries.map((e, j) => (j === i ? { ...e, ...patch } : e)))
+  const update = (i: number, patch: Partial<UniversityEntry>) => set('universities', entries.map((e, j) => (j === i ? updateUniversityEntry(e, patch) : e)))
   const error = (show: boolean, message: string) => showErrors && show && <p role="alert" className="text-xs text-destructive">{message}</p>
   const flag = (country: string | null) => (country ? <span aria-hidden>{flagEmoji(country)}</span> : undefined)
   // Universities are searched on the server as you type (same list for everybody); one picker is open at a time.
@@ -129,7 +129,7 @@ export function UniversityFields({ p, set, orgs, legacyInstitution, countries, d
                         label={e.newClubName ? `${e.newClubName} (new)` : null}
                         options={[{ value: '', label: 'No club' }, ...clubs.map((c) => ({ value: c.id, label: c.name, keywords: c.aliases }))]}
                         searchPlaceholder="Type a club name…"
-                        onChange={(id) => update(i, { clubId: id || null, newClubName: null, ...(id ? {} : { clubPosition: null }) })}
+                        onChange={(id) => update(i, { clubId: id || null, newClubName: null })}
                         onCreate={e.universityId || e.catalogUniversity || e.newUniversity ? (name) => update(i, { clubId: null, newClubName: name }) : undefined}
                       />
                     </Field>

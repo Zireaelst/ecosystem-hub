@@ -84,6 +84,12 @@ export type UniversityEntry = {
 
 export const emptyUniversityEntry = (): UniversityEntry => ({ universityId: null, catalogUniversity: null, newUniversity: null, kind: 'student', fieldOfStudy: null, graduationYear: null, clubId: null, newClubName: null, clubPosition: null })
 
+export function updateUniversityEntry(entry: UniversityEntry, patch: Partial<UniversityEntry>): UniversityEntry {
+  const next = { ...entry, ...patch }
+  if (next.clubId !== entry.clubId || next.newClubName !== entry.newClubName) next.clubPosition = null
+  return next
+}
+
 /** Students must confirm they are 18+ (the hub doesn't take minors). */
 export const needsAdultConfirmation = (entries: readonly { kind: string }[]) => entries.some((e) => e.kind === 'student')
 

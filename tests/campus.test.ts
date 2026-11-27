@@ -1,10 +1,18 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { catalogSearchWords, cleanAliases, mergeUniversityHits, emptyUniversityEntry, MAX_ALIASES, hasUniversityGaps, normalizeOrgName, parseRorId, universityGaps, type UniversityEntry } from '@/lib/campus'
+import { catalogSearchWords, cleanAliases, mergeUniversityHits, emptyUniversityEntry, MAX_ALIASES, hasUniversityGaps, normalizeOrgName, parseRorId, universityGaps, updateUniversityEntry, type UniversityEntry } from '@/lib/campus'
 import { profileSchema } from '@/app/(app)/profile/_lib/schemas'
 
 const base = { name: 'Ada', bio: '', country: 'AT', builderRoles: ['university'], companyName: '', employeeRole: '', githubAccount: '', xAccount: '', linkedinAccount: '', telegramAccount: '', otherSocials: [], wallets: [], skills: [], newsletterOptIn: false, image: null, trackInterests: ['technology'], campusCoordinatorInterest: true, adultConfirmed: true }
 const entry = (patch: Partial<UniversityEntry> = {}): UniversityEntry => ({ ...emptyUniversityEntry(), universityId: 'uni1', fieldOfStudy: 'Computer Science', ...patch })
+
+test('a position belongs to its club, not to the university form row', () => {
+  const before = entry({ clubId: 'club1', clubPosition: 'President' })
+  const switched = updateUniversityEntry(before, { universityId: 'uni2', clubId: null, newClubName: null })
+  assert.equal(updateUniversityEntry(switched, { clubId: 'club2' }).clubPosition, null)
+  assert.equal(updateUniversityEntry(before, { clubId: null, newClubName: 'New club' }).clubPosition, null)
+  assert.equal(updateUniversityEntry(before, { graduationYear: 2030 }).clubPosition, 'President')
+})
 
 test('normalizeOrgName ignores case, accents, punctuation and spacing', () => {
   assert.equal(normalizeOrgName('  Technische Universität   Wien '), 'technische universitat wien')
