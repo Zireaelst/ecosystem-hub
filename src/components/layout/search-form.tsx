@@ -4,6 +4,7 @@ import { useEffect, useRef, useTransition } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { LoaderCircle, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { searchHref } from '@/lib/search-navigation'
 import { cn } from '@/lib/utils'
 
 const DEBOUNCE_MS = 300
@@ -28,19 +29,18 @@ export function SearchForm({ q, placeholder, keep, className }: { q?: string; pl
   }, [q])
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  function search(value: string) {
+  function search(value: string, submittedFrom?: string) {
     clearTimeout(timer.current)
     const v = value.trim()
-    if (v === sent.current) return
+    const href = searchHref(pathname, keep, v, sent.current, submittedFrom)
+    if (href === null) return
     sent.current = v
-    const params = new URLSearchParams(keep)
-    if (v) params.set('q', v)
-    startTransition(() => router.replace(params.size ? `${pathname}?${params}` : pathname, { scroll: false }))
+    startTransition(() => router.replace(href, { scroll: false }))
   }
 
   const Icon = pending ? LoaderCircle : Search
   return (
-    <form role="search" className={cn('relative mb-4 max-w-sm', className)} onSubmit={(e) => { e.preventDefault(); search(input.current?.value ?? '') }}>
+    <form role="search" className={cn('relative mb-4 max-w-sm', className)} onSubmit={(e) => { e.preventDefault(); search(input.current?.value ?? '', window.location.search) }}>
       {keep && Object.entries(keep).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       <Icon className={cn('pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-faint', pending && 'animate-spin')} aria-hidden />
       <Input
